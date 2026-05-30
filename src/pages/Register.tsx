@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '../auth'
-import { apiFetch } from '../api'
+import { apiFetch, ensureCsrfCookie } from '../api'
 import backgroundVideo from '../assets/background.mp4'
 
 export function Register() {
@@ -81,6 +81,7 @@ export function Register() {
 
     setBusy(true)
     try {
+      await ensureCsrfCookie()
       const res = await apiFetch<{ sent: boolean; expires_at?: string }>('/api/send-email-otp/', {
         method: 'POST',
         json: { email: trimmedEmail },
@@ -102,6 +103,7 @@ export function Register() {
     setPopup(null)
     setBusy(true)
     try {
+      await ensureCsrfCookie()
       await apiFetch('/api/verify-email-otp/', { method: 'POST', json: { email: email.trim(), otp: emailOtp.trim() } })
       setPopup({ kind: 'success', message: 'Email verified.' })
       setStage('college')

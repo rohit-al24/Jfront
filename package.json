@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cf:pages:deploy": "npm run build && npx wrangler pages deploy dist",
+    "cf:pages:dev": "npx wrangler pages dev dist"
   },
   "dependencies": {
     "@capacitor-community/text-to-speech": "^8.0.0",
@@ -15,6 +17,8 @@
     "@capacitor/app": "^8.0.1",
     "@capacitor/cli": "^8.1.0",
     "@capacitor/core": "^8.1.0",
+    "express": "^5.2.1",
+    "http-proxy": "^1.18.1",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
