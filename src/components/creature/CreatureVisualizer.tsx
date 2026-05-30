@@ -10,8 +10,9 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { SnakeCreature } from './SnakeCreature'
-import { BodybuilderCreature, CREATURE_STAGES, getCreatureStageIdx } from './BodybuilderCreature'
+import { CREATURE_STAGES, getCreatureStageIdx } from './BodybuilderCreature'
 import { CityCreature } from './CityCreature'
+import { CharacterGrowth } from './CharacterGrowth'
 import './creature.css'
 
 export type CreatureTheme = 'bodybuilder' | 'tree' | 'city'
@@ -21,6 +22,8 @@ interface Props {
   percent: number                         // 0–100
   animate?: boolean                       // trigger pulse (set true then null)
   animType?: 'success' | 'fail' | null
+  /** Increment to re-fire animation without remounting (used by CharacterGrowth) */
+  triggerKey?: number
   size?: 'sm' | 'md' | 'lg'
   xpGain?: number
 }
@@ -68,6 +71,7 @@ export function CreatureVisualizer({
   percent,
   animate = false,
   animType = null,
+  triggerKey = 0,
   size = 'md',
   xpGain,
 }: Props) {
@@ -75,7 +79,6 @@ export function CreatureVisualizer({
 
   // ── Derived values per theme ──────────────────────────────────────────────
   const segments     = Math.round((pct / 100) * 10)   // snake: 0–10 segments
-  const bulge        = pct / 100                       // man: 0.0–1.0
   const buildingCount = Math.max(1, Math.round((pct / 100) * 6))  // city: 1–6
   const maxBuildH    = 40 + Math.round((pct / 100) * 60)          // city: 40–100px
 
@@ -118,18 +121,28 @@ export function CreatureVisualizer({
 
   // ── Map animType to creature-specific trigger ─────────────────────────────
   const snakeTrigger  = animate ? (animType === 'success' ? 'eat'   : 'bite')  : null
-  const manTrigger    = animate ? (animType === 'success' ? 'pump'  : 'droop') : null
   const cityTrigger   = animate ? (animType === 'success' ? 'grow'  : 'crumble') : null
 
   // ── Scale sizes ───────────────────────────────────────────────────────────
   const scaleMap = { sm: 0.72, md: 1, lg: 1.3 }
   const scale = scaleMap[size] ?? 1
 
-  // ── Progress bar ─────────────────────────────────────────────────────────
-  const trackCls =
-    theme === 'bodybuilder' ? 'man-track' : theme === 'tree' ? 'snake-track' : 'city-track'
-  const fillCls =
-    theme === 'bodybuilder' ? 'man-track-fill' : theme === 'tree' ? 'snake-track-fill' : 'city-track-fill'
+  // ── Bodybuilder theme → delegate entirely to CharacterGrowth ─────────────
+  if (theme === 'bodybuilder') {
+    return (
+      <CharacterGrowth
+        percent={pct}
+        triggerKey={triggerKey}
+        animTrigger={animType === 'success' ? 'correct' : animType === 'fail' ? 'wrong' : null}
+        xpGain={xpGain}
+        size={size}
+      />
+    )
+  }
+
+  // ── Progress bar (snake / city) ───────────────────────────────────────────
+  const trackCls = theme === 'tree' ? 'snake-track' : 'city-track'
+  const fillCls  = theme === 'tree' ? 'snake-track-fill' : 'city-track-fill'
 
   return (
     <div className="creature-wrap" style={{ transform: `scale(${scale})`, transformOrigin: 'center bottom' }}>
@@ -160,12 +173,6 @@ export function CreatureVisualizer({
           segments={segments}
           animTrigger={snakeTrigger as any}
           showFood={animType !== 'success'}
-        />
-      )}
-      {theme === 'bodybuilder' && (
-        <BodybuilderCreature
-          bulge={bulge}
-          animTrigger={manTrigger as any}
         />
       )}
       {theme === 'city' && (

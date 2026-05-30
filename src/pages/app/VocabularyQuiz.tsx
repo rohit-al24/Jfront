@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { BookOpen, ChevronLeft, CheckCircle, Volume2, XCircle, Star } from 'lucide-react'
+import { BookOpen, ChevronLeft, CheckCircle, Volume2, XCircle, Star, Lightbulb, Zap } from 'lucide-react'
 import { apiFetch } from '../../api'
 import { saveUnitProgress } from '../../hooks/useUnitProgress'
 import { ExitWarningDialog } from '../../components/ExitWarningDialog'
+
+const XP_PER_CORRECT = 3   // must match backend xp_rate_map for 'vocab'
 
 function playCorrectSound() {
   try {
@@ -62,6 +64,22 @@ export function VocabularyQuiz() {
   const [showExitWarning, setShowExitWarning] = useState(false)
   const [showAppreciation, setShowAppreciation] = useState(false)
 
+  // Hint state
+  const [hintRemaining, setHintRemaining] = useState(3)
+  const [hintText, setHintText] = useState<string | null>(null)
+  const [hintLoading, setHintLoading] = useState(false)
+  const [hintError, setHintError] = useState<string | null>(null)
+
+  // XP result state (from save-score response)
+  const [xpResult, setXpResult] = useState<{ xp_earned: number; passed_75: boolean; already_passed: boolean } | null>(null)
+
+  // Fetch hint daily usage on mount
+  useEffect(() => {
+    apiFetch<{ used: number; limit: number; remaining: number }>('/api/hints/usage/today/')
+      .then((r) => setHintRemaining(r.remaining))
+      .catch(() => null)
+  }, [])
+
   useEffect(() => {
     if (!unitId) return
     apiFetch<{ unit: UnitInfo; questions: QuizQuestion[] }>(`/api/course/unit/${unitId}/vocabulary/quiz/`)
@@ -74,6 +92,12 @@ export function VocabularyQuiz() {
 
   const currentQuestion = questions[currentIndex]
 
+  // Clear hint when question changes
+  useEffect(() => {
+    setHintText(null)
+    setHintError(null)
+  }, [currentIndex])
+
   // Auto-speak the Japanese word when a new question appears
   const spokenIndexRef = useRef(-1)
   useEffect(() => {
@@ -83,6 +107,36 @@ export function VocabularyQuiz() {
       return () => clearTimeout(delay)
     }
   }, [currentIndex, currentQuestion])
+
+  async function handleUseHint() {
+    if (!currentQuestion || hintLoading) return
+    if (hintRemaining <= 0) {
+      setHintError('Daily hint limit reached (3/day)')
+      return
+    }
+    setHintLoading(true)
+    setHintError(null)
+    try {
+      const data = await apiFetch<{ hint_text: string | null; has_hint: boolean; remaining: number }>(
+        `/api/hints/vocab/${currentQuestion.id}/use/`
+      )
+      setHintRemaining(data.remaining)
+      if (data.has_hint && data.hint_text) {
+        setHintText(data.hint_text)
+      } else {
+        setHintError("You haven't added a hint for this word. Visit Study mode to add one.")
+      }
+    } catch (e: any) {
+      if (e?.status === 429) {
+        setHintError('Daily hint limit reached (3/day)')
+        setHintRemaining(0)
+      } else {
+        setHintError('Could not load hint')
+      }
+    } finally {
+      setHintLoading(false)
+    }
+  }
 
   const handleAnswer = (answer: 'A' | 'B' | 'C' | 'D') => {
     if (showResult || !currentQuestion) return
@@ -112,10 +166,12 @@ export function VocabularyQuiz() {
         if (unitId) saveUnitProgress(unitId, { vocabQuizScore: Math.round((newCorrect / newTotal) * 100) })
         // Save to backend
         const pct = Math.round((newCorrect / newTotal) * 100)
-        apiFetch('/api/quiz/save-score/', {
+        apiFetch<{ xp_earned: number; passed_75: boolean; already_passed: boolean }>('/api/quiz/save-score/', {
           method: 'POST',
           json: { unit_id: parseInt(unitId!), quiz_type: 'vocab', score: newCorrect, total: newTotal, percentage: pct },
-        }).catch(() => null)
+        })
+          .then((r) => setXpResult({ xp_earned: r.xp_earned, passed_75: r.passed_75, already_passed: r.already_passed }))
+          .catch(() => null)
         setQuizComplete(true)
       }
     }, delay)
@@ -123,6 +179,7 @@ export function VocabularyQuiz() {
 
   if (quizComplete) {
     const percentage = questions.length > 0 ? Math.round((score.correct / score.total) * 100) : 0
+    const potentialXp = questions.length * XP_PER_CORRECT
     
     return (
       <div className="space-y-6">
@@ -137,6 +194,21 @@ export function VocabularyQuiz() {
             <p className="mt-2 text-lg text-white/50">
               {score.correct} out of {score.total} correct
             </p>
+
+            {/* XP result */}
+            <div className="mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/10 bg-white/[0.04]">
+              <Zap className="h-4 w-4 text-yellow-400" />
+              {xpResult === null ? (
+                <span className="text-white/50">Calculating XP…</span>
+              ) : xpResult.xp_earned > 0 ? (
+                <span className="text-yellow-400">+{xpResult.xp_earned} XP Added!</span>
+              ) : percentage >= 75 && xpResult.already_passed ? (
+                <span className="text-white/50">Already earned XP for this quiz</span>
+              ) : (
+                <span className="text-white/40">Score 75%+ to earn up to {potentialXp} XP</span>
+              )}
+            </div>
+
             <div className="mt-8 flex justify-center gap-3">
               <button
                 onClick={() => {
@@ -145,6 +217,7 @@ export function VocabularyQuiz() {
                   setShowResult(false)
                   setScore({ correct: 0, total: 0 })
                   setQuizComplete(false)
+                  setXpResult(null)
                 }}
                 className="rounded-xl bg-white/10 px-6 py-3 text-base font-bold text-white ring-1 ring-white/20 transition hover:bg-red-600 hover:ring-red-500"
               >
@@ -162,6 +235,8 @@ export function VocabularyQuiz() {
       </div>
     )
   }
+
+  const potentialXp = questions.length * XP_PER_CORRECT
 
   return (
     <div className="space-y-6 relative">
@@ -215,6 +290,12 @@ export function VocabularyQuiz() {
         </div>
       </div>
 
+      {/* XP Preview Banner */}
+      <div className="flex items-center gap-2 rounded-xl bg-yellow-500/[0.08] px-4 py-2.5 ring-1 ring-yellow-500/20 text-sm font-semibold text-yellow-400">
+        <Zap className="h-4 w-4 shrink-0" />
+        Complete with 75%+ accuracy to earn up to <span className="font-black">{potentialXp} XP</span>
+      </div>
+
       {/* Error */}
       {error && (
         <div className="rounded-2xl bg-red-950/60 px-5 py-4 text-base font-medium text-red-300 ring-1 ring-red-500/30">
@@ -235,11 +316,52 @@ export function VocabularyQuiz() {
               >
                 <Volume2 className="h-5 w-5" />
               </button>
+              {/* Hint button */}
+              <button
+                onClick={handleUseHint}
+                disabled={hintLoading || hintRemaining <= 0}
+                title={hintRemaining > 0 ? `Use hint (${hintRemaining} left today)` : 'Daily hint limit reached'}
+                className={`relative inline-flex items-center justify-center h-10 w-10 rounded-xl ring-1 transition hover:scale-105 active:scale-95 ${
+                  hintText
+                    ? 'bg-yellow-500/25 ring-yellow-400/50 text-yellow-300'
+                    : hintRemaining > 0
+                    ? 'bg-white/[0.05] ring-white/10 text-white/40 hover:bg-yellow-500/15 hover:ring-yellow-400/40 hover:text-yellow-300'
+                    : 'bg-white/[0.03] ring-white/5 text-white/20 cursor-not-allowed'
+                }`}
+              >
+                <Lightbulb className="h-5 w-5" />
+                {hintRemaining > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[9px] font-black text-black">
+                    {hintRemaining}
+                  </span>
+                )}
+              </button>
             </div>
             <div className="mt-2 text-sm font-semibold uppercase tracking-wider text-yellow-500">
               Select the correct translation
             </div>
           </div>
+
+          {/* Hint display */}
+          {(hintText || hintError) && (
+            <div className={`mb-5 rounded-xl px-4 py-3 text-sm ring-1 ${
+              hintError
+                ? 'bg-white/[0.03] ring-white/10 text-white/40'
+                : 'bg-yellow-500/10 ring-yellow-500/20 text-yellow-200'
+            }`}>
+              {hintText ? (
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
+                  <span>{hintText}</span>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{hintError}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             {(['A', 'B', 'C', 'D'] as const).map((key) => {

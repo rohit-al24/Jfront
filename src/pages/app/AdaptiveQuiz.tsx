@@ -213,8 +213,11 @@ export function AdaptiveQuiz() {
     } else {
       setCurrentXpGain(0)
     }
+    // Only pass 'success'/'fail' — CharacterGrowth plays correct bounce on success,
+    // shake (no growth) on fail. Reset quickly so next answer can re-trigger.
     setGrowthAnim(isCorrect ? 'success' : 'fail')
     setAnimKey((k) => k + 1)
+    setTimeout(() => setGrowthAnim(null), 750)
 
     try {
       const result: SubmitResult = await apiFetch('/api/course/vocab-state/submit/', {
@@ -247,7 +250,6 @@ export function AdaptiveQuiz() {
       setTimeout(() => {
         setPicked(null)
         setFeedback(null)
-        setGrowthAnim(null)
 
         setQueue((prev) => {
           const [_, ...rest] = prev
@@ -433,12 +435,12 @@ export function AdaptiveQuiz() {
           {/* Creature Visualizer */}
           <div className="flex-shrink-0">
             <CreatureVisualizer
-              key={animKey}
               theme={theme}
               percent={masteryPercent}
               size="md"
               animate={growthAnim !== null}
               animType={growthAnim}
+              triggerKey={animKey}
               xpGain={currentXpGain}
             />
           </div>
