@@ -1,0 +1,14 @@
+{
+  "appId": "com.example.jback",
+  "appName": "JbackApp",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+  ,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "androidSplashResourceName": "",
+      "backgroundColor": "#00000000"
+    }
+  }
+}

@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+
+  --bg: 7 8 11;
+  --surface: 16 18 24;
+  --text: 238 238 240;
+  --muted: 160 160 170;
+
+  --red-500: 239 68 68;
+  --red-600: 220 38 38;
+
+  --gold-400: 250 204 21;
+  --gold-500: 234 179 8;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ── Growth Visualizer animations ─────────────────────────────────────────── */
+@keyframes power-lift {
+  0%   { transform: scale(1) translateY(0); }
+  20%  { transform: scale(1.55) translateY(-18px); filter: drop-shadow(0 0 24px #f59e0b); }
+  55%  { transform: scale(1.15) translateY(-6px); }
+  80%  { transform: scale(0.94) translateY(3px); }
+  100% { transform: scale(1) translateY(0); }
+}
+@keyframes neon-upgrade {
+  0%   { transform: scale(1);   filter: drop-shadow(0 0 4px #06b6d4); }
+  25%  { transform: scale(1.45); filter: drop-shadow(0 0 36px #06b6d4) brightness(2.4); }
+  60%  { transform: scale(1.12); filter: drop-shadow(0 0 18px #06b6d4) brightness(1.5); }
+  100% { transform: scale(1);   filter: drop-shadow(0 0 6px #06b6d4); }
+}
+@keyframes gentle-grow {
+  0%   { transform: scale(1) rotate(0deg); }
+  25%  { transform: scale(1.5) rotate(-12deg); filter: drop-shadow(0 0 22px #22c55e); }
+  65%  { transform: scale(1.15) rotate(6deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+@keyframes wilt {
+  0%   { transform: scale(1) rotate(0deg); filter: none; }
+  20%  { transform: scale(0.78) rotate(-18deg); filter: grayscale(1) brightness(0.4); }
+  55%  { transform: scale(0.9) rotate(10deg);  filter: grayscale(0.8) brightness(0.6); }
+  100% { transform: scale(1) rotate(0deg);     filter: none; }
+}
+@keyframes level-up {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.5); }
+  15%  { opacity: 1; transform: translateX(-50%) translateY(-2px) scale(1.2); }
+  70%  { opacity: 1; transform: translateX(-50%) translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(0.8); }
+}
+@keyframes xp-flyup {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  50%  { opacity: 1; transform: translateY(-22px) scale(1.3); }
+  100% { opacity: 0; transform: translateY(-40px) scale(0.85); }
+}
+@keyframes ring-pulse {
+  0%   { opacity: 0.4; transform: scale(1); }
+  50%  { opacity: 1;   transform: scale(1.1); }
+  100% { opacity: 0.4; transform: scale(1); }
+}
+
+.animate-power-lift   { animation: power-lift   1s cubic-bezier(.175,.885,.32,1.275); }
+.animate-neon-upgrade { animation: neon-upgrade  1s ease-in-out; }
+.animate-gentle-grow  { animation: gentle-grow   1s cubic-bezier(.175,.885,.32,1.275); }
+.animate-wilt         { animation: wilt          0.9s ease-in-out; }
+.animate-level-up     { animation: level-up      2s ease-in-out forwards; }
+.animate-xp-flyup     { animation: xp-flyup      1.2s ease-out forwards; }
+.animate-ring-pulse   { animation: ring-pulse     0.7s ease-in-out; }
+
+/* ── Celebration / Confetti animations ──────────────────────────────────── */
+
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(110vh) translateX(var(--drift, 0%)) rotate(var(--rot, 360deg)); opacity: 0; }
+}
+
+@keyframes modal-pop {
+  0%   { transform: scale(0.5) translateY(40px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes badge-spin {
+  0%   { transform: scale(0) rotate(-180deg); opacity: 0; }
+  60%  { transform: scale(1.2) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* Adaptive sidebar scrollbar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+.sidebar-scroll:hover {
+  scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.18);
+}
+
+@keyframes fade-up {
+  0%   { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%); background-size: 200% 100%; background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Safe-area for mobile devices with notches / system bars */
+.safe-area {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+
+  /* Legacy iOS Safari support */
+  padding-top: constant(safe-area-inset-top);
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-left: constant(safe-area-inset-left);
+  padding-right: constant(safe-area-inset-right);
+}
