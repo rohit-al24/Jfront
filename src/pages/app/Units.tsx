@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { BookOpen, FileText, Languages, ChevronLeft, Zap, CheckCircle2, Circle } from 'lucide-react'
+import { BookOpen, FileText, Languages, ChevronLeft, Zap } from 'lucide-react'
 import { apiFetch } from '../../api'
 import { getUnitProgress } from '../../hooks/useUnitProgress'
-import type { UnitProgress } from '../../hooks/useUnitProgress'
 
 type Unit = {
   id: number
@@ -118,42 +117,11 @@ export function Units() {
 
       {/* Units Grid */}
       <div className="space-y-4">
-        {units.map((unit) => {
-          const prog: UnitProgress = unitProgressMap[unit.id]
-
-          // Vocab: 0 = nothing, 40 = studied, 100 = quiz done
-          const vocabPct = prog.vocabQuizScore != null
-            ? Math.max(40, prog.vocabQuizScore)
-            : prog.vocabStudied ? 40 : 0
-          const vocabLabel = prog.vocabQuizScore != null
-            ? `Quiz: ${prog.vocabQuizScore}%`
-            : prog.vocabStudied ? 'Studied' : 'Not started'
-          const vocabColor = prog.vocabQuizScore != null
-            ? (prog.vocabQuizScore >= 80 ? 'bg-emerald-500' : prog.vocabQuizScore >= 60 ? 'bg-yellow-500' : 'bg-red-500')
-            : prog.vocabStudied ? 'bg-red-400' : 'bg-white/20'
-          const vocabTextColor = prog.vocabQuizScore != null
-            ? (prog.vocabQuizScore >= 80 ? 'text-emerald-400' : prog.vocabQuizScore >= 60 ? 'text-yellow-400' : 'text-red-400')
-            : prog.vocabStudied ? 'text-red-300' : 'text-white/25'
-
-          // Grammar: learn pct first, then quiz done = 100
-          const grammarPct = prog.grammarQuizDone ? 100 : prog.grammarLearnPct
-          const grammarLabel = prog.grammarQuizDone
-            ? 'Quiz Cleared'
-            : prog.grammarLearnPct > 0 ? `Learn: ${prog.grammarLearnPct}%` : 'Not started'
-          const grammarColor = prog.grammarQuizDone
-            ? 'bg-emerald-500'
-            : prog.grammarLearnPct >= 80 ? 'bg-yellow-400'
-            : prog.grammarLearnPct > 0 ? 'bg-yellow-500/70' : 'bg-white/20'
-          const grammarTextColor = prog.grammarQuizDone
-            ? 'text-emerald-400'
-            : prog.grammarLearnPct > 0 ? 'text-yellow-400' : 'text-white/25'
-
-          return (
+        {units.map((unit) => (
           <div
             key={unit.id}
             className="rounded-2xl bg-white/[0.03] p-6 ring-1 ring-white/10"
           >
-            {/* Unit header */}
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <div className="text-sm font-bold uppercase tracking-wider text-yellow-500">
@@ -164,53 +132,19 @@ export function Units() {
                   <p className="mt-1 text-sm text-white/50">{unit.description}</p>
                 )}
               </div>
-              {/* Overall unit completion dot */}
-              {(prog.vocabQuizScore != null || prog.grammarQuizDone) && (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-300 ring-1 ring-emerald-500/25">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {prog.vocabQuizScore != null && prog.grammarQuizDone ? 'Complete' : 'In Progress'}
-                </span>
-              )}
             </div>
 
-            {/* Two Path Columns */}
+            {/* Two Path Buttons */}
             <div className="grid gap-3 sm:grid-cols-2">
-              {/* ── Vocabulary Card ── */}
-              <div className="flex flex-col rounded-xl bg-white/[0.02] p-4 ring-1 ring-white/10">
-                <div className="mb-2 flex items-center gap-2">
+              {/* Vocabulary Path */}
+              <div className="rounded-xl bg-white/[0.02] p-4 ring-1 ring-white/10">
+                <div className="mb-3 flex items-center gap-2">
                   <Languages className="h-5 w-5 text-red-400" />
                   <h4 className="text-base font-bold text-white">Vocabulary</h4>
-                  <span className="ml-auto text-xs text-white/30">{unit.vocab_count} words</span>
                 </div>
-
-                {/* Always-visible vocab progress */}
-                <div className="mb-3">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className={`text-xs font-bold ${vocabTextColor}`}>{vocabLabel}</span>
-                    {prog.vocabQuizScore != null && (
-                      <span className={`text-xs font-black ${vocabTextColor}`}>{Math.max(40, prog.vocabQuizScore)}%</span>
-                    )}
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${vocabColor}`}
-                      style={{ width: `${vocabPct}%` }}
-                    />
-                  </div>
-                  {/* Step dots */}
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <div className={`flex items-center gap-1 text-[10px] font-bold ${prog.vocabStudied ? 'text-red-300' : 'text-white/20'}`}>
-                      {prog.vocabStudied ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-                      Studied
-                    </div>
-                    <div className="flex-1 h-px bg-white/10" />
-                    <div className={`flex items-center gap-1 text-[10px] font-bold ${prog.vocabQuizScore != null ? vocabTextColor : 'text-white/20'}`}>
-                      {prog.vocabQuizScore != null ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-                      Quiz
-                    </div>
-                  </div>
-                </div>
-
+                <p className="mb-3 text-sm text-white/40">
+                  {unit.vocab_count} {unit.vocab_count === 1 ? 'word' : 'words'}
+                </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => navigate(`/app/course/unit/${unit.id}/vocabulary/study`)}
@@ -225,50 +159,45 @@ export function Units() {
                     Quiz
                   </button>
                 </div>
+                {/* Pakka Adaptive Quiz */}
                 <button
                   onClick={() => setPakkaWarning({ unitId: unit.id, path: `/app/course/unit/${unit.id}/adaptive-quiz` })}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600/20 px-4 py-2 text-sm font-bold text-violet-300 ring-1 ring-violet-500/30 transition hover:bg-violet-600 hover:text-white hover:ring-violet-500"
                 >
                   <Zap className="h-4 w-4" /> Pakka Adaptive
                 </button>
-              </div>
-
-              {/* ── Grammar Card ── */}
-              <div className="flex flex-col rounded-xl bg-white/[0.02] p-4 ring-1 ring-white/10">
-                <div className="mb-2 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-yellow-400" />
-                  <h4 className="text-base font-bold text-white">Grammar</h4>
-                  <span className="ml-auto text-xs text-white/30">{unit.grammar_count} topics</span>
-                </div>
-
-                {/* Always-visible grammar progress */}
-                <div className="mb-3">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className={`text-xs font-bold ${grammarTextColor}`}>{grammarLabel}</span>
-                    {grammarPct > 0 && (
-                      <span className={`text-xs font-black ${grammarTextColor}`}>{grammarPct}%</span>
+                {/* Vocab progress badges */}
+                {(unitProgressMap[unit.id]?.vocabStudied || unitProgressMap[unit.id]?.vocabQuizScore != null) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {unitProgressMap[unit.id]?.vocabStudied && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-300 ring-1 ring-emerald-500/25">
+                        ✓ Studied
+                      </span>
+                    )}
+                    {unitProgressMap[unit.id]?.vocabQuizScore != null && (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ${
+                        (unitProgressMap[unit.id]?.vocabQuizScore ?? 0) >= 80
+                          ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25'
+                          : (unitProgressMap[unit.id]?.vocabQuizScore ?? 0) >= 60
+                          ? 'bg-yellow-500/15 text-yellow-300 ring-yellow-500/25'
+                          : 'bg-red-500/15 text-red-300 ring-red-500/25'
+                      }`}>
+                        Quiz: {unitProgressMap[unit.id]?.vocabQuizScore}%
+                      </span>
                     )}
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${grammarColor}`}
-                      style={{ width: `${grammarPct}%` }}
-                    />
-                  </div>
-                  {/* Step dots */}
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <div className={`flex items-center gap-1 text-[10px] font-bold ${prog.grammarLearnPct >= 100 ? 'text-yellow-300' : prog.grammarLearnPct > 0 ? 'text-yellow-400/70' : 'text-white/20'}`}>
-                      {prog.grammarLearnPct >= 100 ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-                      Learned
-                    </div>
-                    <div className="flex-1 h-px bg-white/10" />
-                    <div className={`flex items-center gap-1 text-[10px] font-bold ${prog.grammarQuizDone ? 'text-emerald-400' : 'text-white/20'}`}>
-                      {prog.grammarQuizDone ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-                      Quiz
-                    </div>
-                  </div>
-                </div>
+                )}
+              </div>
 
+              {/* Grammar Path */}
+              <div className="rounded-xl bg-white/[0.02] p-4 ring-1 ring-white/10">
+                <div className="mb-3 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-yellow-400" />
+                  <h4 className="text-base font-bold text-white">Grammar</h4>
+                </div>
+                <p className="mb-3 text-sm text-white/40">
+                  {unit.grammar_count} {unit.grammar_count === 1 ? 'topic' : 'topics'}
+                </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => navigate(`/app/course/unit/${unit.id}/grammar/learn${grammarQuery}`)}
@@ -283,17 +212,41 @@ export function Units() {
                     Quiz
                   </button>
                 </div>
+
                 <button
                   onClick={() => navigate(`/app/course/unit/${unit.id}/grammar-pakka${grammarQuery}`)}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-600/15 px-4 py-2 text-sm font-bold text-yellow-300 ring-1 ring-yellow-500/25 transition hover:bg-yellow-600 hover:text-white hover:ring-yellow-500"
                 >
                   <Zap className="h-4 w-4" /> Pakka Adaptive
                 </button>
+                {/* Grammar progress indicators */}
+                {(unitProgressMap[unit.id]?.grammarLearnPct > 0 || unitProgressMap[unit.id]?.grammarQuizDone) && (
+                  <div className="mt-2 space-y-1.5">
+                    {unitProgressMap[unit.id]?.grammarLearnPct > 0 && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-xs text-white/30">Learn progress</span>
+                          <span className="text-xs font-bold text-yellow-400">{unitProgressMap[unit.id]?.grammarLearnPct}%</span>
+                        </div>
+                        <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-yellow-500/70"
+                            style={{ width: `${unitProgressMap[unit.id]?.grammarLearnPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {unitProgressMap[unit.id]?.grammarQuizDone && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-300 ring-1 ring-emerald-500/25">
+                        ✓ Quiz Cleared
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          )
-        })}
+        ))}
       </div>
 
       {units.length === 0 && !error && (
