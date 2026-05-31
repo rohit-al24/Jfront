@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { BookOpen, ChevronLeft, Volume2, Lightbulb, X, Save, Pencil } from 'lucide-react'
 import { apiFetch } from '../../api'
+import { useAuth } from '../../auth'
 import { saveUnitProgress } from '../../hooks/useUnitProgress'
 
 function speakJa(text: string) {
@@ -40,6 +41,7 @@ function SpeakButton({ text }: { text: string }) {
 type FriendHint = {
   user_id: number
   display_name: string
+  profile_picture?: string | null
 }
 
 type VocabItem = {
@@ -78,6 +80,7 @@ type HintDetails = {
 export function VocabularyStudy() {
   const { unitId } = useParams<{ unitId: string }>()
   const navigate = useNavigate()
+  const { state: authState } = useAuth()
   const [unit, setUnit] = useState<UnitInfo | null>(null)
   const [vocabulary, setVocabulary] = useState<VocabItem[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -90,6 +93,14 @@ export function VocabularyStudy() {
   const [hintLoading, setHintLoading] = useState<number | null>(null)
   const [hintError, setHintError] = useState<Record<number, string | undefined>>({})
   const [hintEditing, setHintEditing] = useState<Record<number, boolean | undefined>>({})
+
+  // Floating avatar tooltip (positioned near clicked avatar)
+  type FloatingPopup = { vocabId: number; userKey: string; isMe: boolean; name: string; top: number; left: number; pic?: string | null }
+  const [floatingPopup, setFloatingPopup] = useState<FloatingPopup | null>(null)
+  const floatRef = useRef<HTMLDivElement>(null)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Overflow popup for +N click
+  const [overflowPopup, setOverflowPopup] = useState<{ vocabId: number } | null>(null)
 
   useEffect(() => {
     if (!unitId) return
@@ -120,6 +131,30 @@ export function VocabularyStudy() {
     } finally {
       setHintLoading(null)
     }
+  }
+
+  function openAvatarPopup(e: React.MouseEvent, vocabId: number, userKey: string, isMe: boolean, name: string, pic?: string | null) {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const FLOATER_H = 80
+    // Position ABOVE the avatar — overlap by 2px so there is no gap for the cursor to fall through
+    const top = Math.max(rect.top - FLOATER_H + 2, 8)
+    // Right-align floater with the right edge of the avatar
+    const left = Math.min(Math.max(rect.right - 208, 8), window.innerWidth - 216)
+    setFloatingPopup({ vocabId, userKey, isMe, name, top, left, pic })
+    if (!hintDetails[vocabId]) void loadHintDetails(vocabId)
+  }
+
+  function scheduleClosePopup(delay = 220) {
+    hoverTimer.current = setTimeout(() => setFloatingPopup(null), delay)
+  }
+  function cancelClosePopup() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+  }
+
+  function openOverflowPopup(vocabId: number) {
+    setOverflowPopup({ vocabId })
+    if (!hintDetails[vocabId]) void loadHintDetails(vocabId)
   }
 
   function toggleHint(vocabId: number) {
@@ -153,8 +188,136 @@ export function VocabularyStudy() {
     }
   }
 
+  // Resolve profile picture for the open popup (hintDetails when loaded, fall back to pic from vocab list)
+  const popupPic = (() => {
+    if (!floatingPopup) return null
+    const d = hintDetails[floatingPopup.vocabId]
+    if (d) {
+      if (floatingPopup.isMe) return d.my_hint?.profile_picture ?? null
+      const fh = d.friends_hints.find((f) => String(f.user_id) === floatingPopup.userKey)
+      return fh?.profile_picture ?? null
+    }
+    return floatingPopup.pic ?? null
+  })()
+
+  // All hinters for overflow popup
+  const overflowHinters = (() => {
+    if (!overflowPopup) return []
+    const item = vocabulary.find((v) => v.id === overflowPopup.vocabId)
+    if (!item) return []
+    const all: { key: string; name: string; isMe: boolean; pic?: string | null }[] = [
+      ...(item.my_hint ? [{ key: 'me', name: authState?.user?.username || 'You', isMe: true, pic: null as string | null }] : []),
+      ...item.friends_hints.map((fh) => ({ key: String(fh.user_id), name: fh.display_name, isMe: false, pic: fh.profile_picture ?? null })),
+    ]
+    return all.slice(3) // only hidden ones
+  })()
+
   return (
     <div className="space-y-6">
+      {/* Floating avatar tooltip — no backdrop, anchored above clicked avatar */}
+      {floatingPopup && (
+        <div
+          ref={floatRef}
+          className="fixed z-50 w-52 animate-[popIn_0.15s_ease-out] overflow-hidden rounded-2xl border border-white/10 bg-[#141418] shadow-[0_8px_40px_rgba(0,0,0,0.7)]"
+          style={{ top: floatingPopup.top, left: floatingPopup.left }}
+          onMouseEnter={cancelClosePopup}
+          onMouseLeave={() => scheduleClosePopup()}
+        >
+          {/* Invisible hover-bridge: extends pointer area downward to cover any remaining gap to the avatar */}
+          <div className="pointer-events-auto absolute -bottom-2 left-0 right-0 h-2" onMouseEnter={cancelClosePopup} />
+          <div className={`h-1 w-full ${
+            floatingPopup.isMe ? 'bg-gradient-to-r from-yellow-500 to-yellow-300' : 'bg-gradient-to-r from-violet-600 to-blue-500'
+          }`} />
+          <div className="flex items-center gap-3 p-3">
+            {/* Avatar */}
+            <div className={`flex h-10 w-10 flex-none items-center justify-center rounded-xl overflow-hidden ring-2 ${
+              floatingPopup.isMe ? 'ring-yellow-500/40' : 'ring-violet-500/40'
+            }`}>
+              {popupPic ? (
+                <img src={popupPic} alt={floatingPopup.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className={`flex h-full w-full items-center justify-center text-base font-black ${
+                  floatingPopup.isMe ? 'bg-yellow-500/20 text-yellow-200' : 'bg-violet-500/20 text-violet-200'
+                }`}>
+                  {(floatingPopup.name?.[0] ?? '?').toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className={`text-[9px] font-black uppercase tracking-[0.25em] ${
+                floatingPopup.isMe ? 'text-yellow-500' : 'text-violet-400'
+              }`}>
+                {floatingPopup.isMe ? 'You' : 'Friend'}
+              </div>
+              <div className="truncate text-sm font-bold text-white leading-tight mt-0.5">{floatingPopup.name}</div>
+              <div className={`mt-1 flex items-center gap-1 text-[10px] font-semibold ${
+                floatingPopup.isMe ? 'text-yellow-400/70' : 'text-violet-400/70'
+              }`}>
+                <Lightbulb className="h-2.5 w-2.5" />
+                Has set a hint
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Overflow hinters popup (+N) */}
+      {overflowPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          onClick={() => setOverflowPopup(null)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-72 animate-[popIn_0.18s_ease-out] overflow-hidden rounded-2xl border border-white/10 bg-[#141418] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-1.5 w-full bg-gradient-to-r from-white/20 to-white/5" />
+            <div className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-widest text-white/60">More Hinters</span>
+                <button onClick={() => setOverflowPopup(null)} className="text-white/30 hover:text-white transition">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {hintLoading === overflowPopup.vocabId ? (
+                <div className="flex items-center gap-2 text-sm text-white/40 py-3">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                  Loading…
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {overflowHinters.map((h) => {
+                    const d = hintDetails[overflowPopup.vocabId]
+                    const pic = (h.isMe
+                      ? d?.my_hint?.profile_picture
+                      : d?.friends_hints.find((f) => String(f.user_id) === h.key)?.profile_picture)
+                      ?? h.pic
+                    return (
+                      <button
+                        key={h.key}
+                        className="flex w-full items-center gap-3 rounded-xl p-2.5 ring-1 ring-white/5 transition hover:bg-white/[0.04] hover:ring-white/10"
+                        onClick={(e) => { setOverflowPopup(null); openAvatarPopup(e, overflowPopup.vocabId, h.key, h.isMe, h.name, h.pic) }}
+                      >
+                        <div className={`flex h-8 w-8 flex-none items-center justify-center rounded-full overflow-hidden ring-1 ${
+                          h.isMe ? 'ring-yellow-500/40 bg-yellow-500/20' : 'ring-violet-500/30 bg-violet-500/20'
+                        }`}>
+                          {pic
+                            ? <img src={pic} alt={h.name} className="h-full w-full object-cover" />
+                            : <span className={`text-xs font-black ${ h.isMe ? 'text-yellow-200' : 'text-violet-200' }`}>{(h.name?.[0] ?? '?').toUpperCase()}</span>
+                          }
+                        </div>
+                        <span className="flex-1 truncate text-sm font-semibold text-white/80">{h.name}</span>
+                        <Lightbulb className={`h-3.5 w-3.5 flex-none ${ h.isMe ? 'text-yellow-400' : 'text-violet-400' }`} />
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1a0a0a] to-[#0d0d0d] p-6 ring-1 ring-white/10 md:p-8">
         <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-red-600/10 blur-3xl" />
@@ -198,7 +361,7 @@ export function VocabularyStudy() {
                 <th className="px-6 py-4 text-left text-sm font-bold uppercase tracking-wider text-yellow-500">
                   English
                 </th>
-                <th className="px-4 py-4 text-center text-sm font-bold uppercase tracking-wider text-yellow-500 w-20">
+                <th className="px-4 py-4 text-right text-sm font-bold uppercase tracking-wider text-yellow-500 w-32">
                   Hint
                 </th>
               </tr>
@@ -208,6 +371,7 @@ export function VocabularyStudy() {
                 <HintRow
                   key={item.id}
                   item={item}
+                  currentUserName={authState?.user?.username ?? ''}
                   isOpen={openHintId === item.id}
                   hintInput={hintInputs[item.id] ?? item.my_hint ?? ''}
                   saving={hintSaving === item.id}
@@ -224,7 +388,10 @@ export function VocabularyStudy() {
                     setHintEditing((prev) => ({ ...prev, [item.id]: false }))
                     const t = (hintDetails[item.id]?.my_hint?.hint_text ?? item.my_hint ?? '').toString()
                     setHintInputs((prev) => ({ ...prev, [item.id]: t }))
-                  }}
+                  }}                  activePopupVocabId={floatingPopup?.vocabId}                  onAvatarEnter={(e, userKey, isMe, name, pic) => openAvatarPopup(e, item.id, userKey, isMe, name, pic)}
+                  onAvatarLeave={() => scheduleClosePopup()}
+                  onAvatarClick={(e, userKey, isMe, name, pic) => openAvatarPopup(e, item.id, userKey, isMe, name, pic)}
+                  onOverflowClick={() => openOverflowPopup(item.id)}
                 />
               ))}
             </tbody>
@@ -256,6 +423,7 @@ export function VocabularyStudy() {
 
 type HintRowProps = {
   item: VocabItem
+  currentUserName: string
   isOpen: boolean
   hintInput: string
   saving: boolean
@@ -269,6 +437,11 @@ type HintRowProps = {
   onClose: () => void
   onEdit: () => void
   onCancelEdit: () => void
+  onAvatarEnter: (e: React.MouseEvent, userKey: string, isMe: boolean, name: string, pic?: string | null) => void
+  onAvatarLeave: () => void
+  onAvatarClick: (e: React.MouseEvent, userKey: string, isMe: boolean, name: string, pic?: string | null) => void
+  onOverflowClick: () => void
+  activePopupVocabId?: number
 }
 
 function Avatar({ name, url, size = 'md' }: { name: string; url?: string | null; size?: 'sm' | 'md' }) {
@@ -287,6 +460,7 @@ function Avatar({ name, url, size = 'md' }: { name: string; url?: string | null;
 
 function HintRow({
   item,
+  currentUserName,
   isOpen,
   hintInput,
   saving,
@@ -300,7 +474,12 @@ function HintRow({
   onClose,
   onEdit,
   onCancelEdit,
-}: HintRowProps) {
+  onAvatarEnter,
+  onAvatarLeave,
+  onAvatarClick,
+  onOverflowClick,
+  activePopupVocabId,
+}: HintRowProps & { activePopupVocabId?: number }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const hasMyHint = !!item.my_hint
 
@@ -310,6 +489,14 @@ function HintRow({
 
   const friendCount = item.friends_hints.length
   const hasAny = hasMyHint || friendCount > 0
+
+  // Build the hint-icon stack: user first (if they have a hint), then friends
+  const allHinters: { key: string; name: string; isMe: boolean; pic?: string | null }[] = [
+    ...(hasMyHint ? [{ key: 'me', name: currentUserName || 'You', isMe: true, pic: null as string | null }] : []),
+    ...item.friends_hints.map((fh) => ({ key: String(fh.user_id), name: fh.display_name, isMe: false, pic: fh.profile_picture ?? null })),
+  ]
+  const visibleHinters = allHinters.slice(0, 3)
+  const hiddenCount = allHinters.length - visibleHinters.length
 
   return (
     <>
@@ -323,43 +510,62 @@ function HintRow({
         <td className="px-6 py-4 text-base text-white/70">
           {item.correct}
         </td>
-        <td className="px-4 py-4 text-center">
-          <div className="flex flex-col items-center gap-1">
+        <td className="px-4 py-4">
+          <div className="flex items-center justify-end gap-2">
+            {/* Overlapping profile circles: user (if hinted) + friends — inline, left of lightbulb */}
+            {allHinters.length > 0 && (
+              <div className="flex items-center">
+                {visibleHinters.map((h, idx) => (
+                  <button
+                    key={h.key}
+                    type="button"
+                    style={{ marginLeft: idx === 0 ? 0 : '-5px', zIndex: visibleHinters.length - idx }}
+                    className={`relative h-5 w-5 flex-none rounded-full ring-[1.5px] ring-[#0d0d0d] flex items-center justify-center overflow-hidden cursor-pointer transition-transform hover:scale-110 hover:z-10 ${
+                      h.isMe ? 'bg-yellow-500/30' : 'bg-violet-500/25'
+                    }`}
+                    title={h.isMe ? `You (${h.name})` : h.name}
+                    onMouseEnter={(e) => onAvatarEnter(e, h.key, h.isMe, h.name, h.pic)}
+                    onMouseLeave={onAvatarLeave}
+                    onClick={(e) => onAvatarClick(e, h.key, h.isMe, h.name, h.pic)}
+                  >
+                    {h.pic ? (
+                      <img src={h.pic} alt={h.name} className="h-full w-full object-cover pointer-events-none" />
+                    ) : (
+                      <span className={`text-[8px] font-black leading-none pointer-events-none ${
+                        h.isMe ? 'text-yellow-200' : 'text-violet-200'
+                      }`}>
+                        {(h.name?.[0] ?? '?').toUpperCase()}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                {hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    style={{ marginLeft: '-5px', zIndex: 0 }}
+                    className="h-5 w-5 flex-none rounded-full bg-white/10 ring-[1.5px] ring-[#0d0d0d] flex items-center justify-center cursor-pointer transition-transform hover:scale-110 hover:bg-white/20"
+                    title={`+${hiddenCount} more`}
+                    onClick={onOverflowClick}
+                  >
+                    <span className="text-[7px] font-black text-white/50 leading-none pointer-events-none">+{hiddenCount}</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {/* Lightbulb toggle button — glows when floater is open for this row */}
             <button
               onClick={onToggle}
               title={hasAny ? 'View hints' : 'Add a personal hint'}
-              className={`relative inline-flex items-center justify-center h-8 w-8 rounded-lg ring-1 transition-all duration-200 ${
-                hasAny
+              className={`inline-flex flex-none items-center justify-center h-8 w-8 rounded-lg ring-1 transition-all duration-200 ${
+                activePopupVocabId === item.id
+                  ? 'bg-yellow-500/30 ring-yellow-400/80 text-yellow-300 shadow-[0_0_14px_rgba(234,179,8,0.5)] scale-110'
+                  : hasAny
                   ? 'bg-yellow-500/20 ring-yellow-400/40 text-yellow-400 hover:bg-yellow-500/30'
                   : 'bg-white/[0.05] ring-white/10 text-white/30 hover:bg-yellow-500/10 hover:ring-yellow-400/30 hover:text-yellow-400'
               }`}
             >
               <Lightbulb className="h-4 w-4" />
             </button>
-            {friendCount > 0 && (
-              <div className="flex items-center justify-center">
-                {item.friends_hints.slice(0, 3).map((fh, idx) => (
-                  <div
-                    key={fh.user_id}
-                    style={{ marginLeft: idx === 0 ? 0 : '-4px', zIndex: 3 - idx }}
-                    className="relative h-4 w-4 flex-none rounded-full bg-yellow-500/20 ring-1 ring-black flex items-center justify-center overflow-hidden"
-                    title={fh.display_name}
-                  >
-                    <span className="text-[7px] font-black text-yellow-300 leading-none">
-                      {(fh.display_name?.[0] ?? '?').toUpperCase()}
-                    </span>
-                  </div>
-                ))}
-                {friendCount > 3 && (
-                  <div
-                    style={{ marginLeft: '-4px', zIndex: 0 }}
-                    className="h-4 w-4 flex-none rounded-full bg-white/10 ring-1 ring-black flex items-center justify-center"
-                  >
-                    <span className="text-[6px] font-black text-white/60 leading-none">+{friendCount - 3}</span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </td>
       </tr>

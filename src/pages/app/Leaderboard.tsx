@@ -120,10 +120,15 @@ export function Leaderboard() {
                     </div>
                   )}
                 </div>
-                {/* Name + username */}
+                {/* Name + username + college */}
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-sm font-bold text-white leading-tight">{e.name}</div>
                   <div className="truncate text-xs text-white/40">@{handle} · {e.level}</div>
+                  {e.college && (
+                    <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-violet-400/70" title={e.college}>
+                      {e.college}
+                    </div>
+                  )}
                 </div>
                 {/* XP + view profile */}
                 <div className="flex items-center gap-2 flex-none">

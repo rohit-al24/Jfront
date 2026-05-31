@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, Trophy, ShoppingBag, User, RotateCcw, Menu, X, LogOut, Flame, ChevronLeft, ChevronRight, NotebookText, ClipboardCheck, GraduationCap, BadgeCheck, Lock, Users, MessageCircle } from 'lucide-react'
+import { BookOpen, Trophy, ShoppingBag, User, RotateCcw, Menu, X, LogOut, Flame, NotebookText, ClipboardCheck, GraduationCap, BadgeCheck, Lock, Users, MessageCircle, Settings } from 'lucide-react'
 
 import { useAuth } from '../auth'
 import { usePaymentsConfig } from '../paymentsConfig'
@@ -26,6 +26,7 @@ const navItems: NavItemConfig[] = [
   { to: '/app/chat', label: 'Messages', icon: MessageCircle },
   { to: '/app/shop', label: 'Shop', icon: ShoppingBag },
   { to: '/app/profile', label: 'Profile', icon: User },
+  { to: '/app/settings', label: 'Settings', icon: Settings },
 ]
 
 function DesktopNavItem({ to, label, icon: Icon, collapsed, locked, badge }: NavItemConfig & { collapsed?: boolean; locked?: boolean; badge?: number }) {
@@ -78,6 +79,27 @@ function MobileNavItem({ to, icon: Icon }: NavItemConfig) {
     >
       <Icon className="h-5 w-5" />
     </NavLink>
+  )
+}
+
+// Animated bento-dot sidebar toggle — 4 squares pulse with stagger, no arrows/lines
+function BentoDots({ collapsed }: { collapsed: boolean }) {
+  // d0..d3 animate in sequence; when collapsed, d3 fades out to hint 'open'
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="currentColor" aria-hidden="true">
+      <rect x="2" y="2" width="8" height="8" rx="2"
+        style={{ animation: 'dotPulse 1.6s ease-in-out 0s infinite' }} />
+      <rect x="12" y="2" width="8" height="8" rx="2"
+        style={{ animation: 'dotPulse 1.6s ease-in-out 0.25s infinite' }} />
+      <rect x="2" y="12" width="8" height="8" rx="2"
+        style={{ animation: 'dotPulse 1.6s ease-in-out 0.5s infinite' }} />
+      <rect x="12" y="12" width="8" height="8" rx="2"
+        style={{
+          animation: 'dotPulse 1.6s ease-in-out 0.75s infinite',
+          opacity: collapsed ? 0.25 : 1,
+          transition: 'opacity 0.3s',
+        }} />
+    </svg>
   )
 }
 
@@ -152,10 +174,10 @@ export function SidebarLayout({
             {/* Desktop collapse/expand */}
             <button
               onClick={() => setCollapsed((s) => !s)}
-              className="hidden rounded-lg p-2 text-white transition-colors hover:bg-white/10 md:inline-flex"
+              className="hidden items-center justify-center rounded-xl bg-white/8 p-2.5 text-white shadow-inner ring-1 ring-white/10 transition-all duration-150 hover:bg-white/14 hover:ring-white/20 active:scale-95 md:inline-flex"
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {collapsed ? <ChevronRight className="h-6 w-6" /> : <ChevronLeft className="h-6 w-6" />}
+              <BentoDots collapsed={collapsed} />
             </button>
             <div className="flex items-center gap-2">
               <div className="text-xl font-black italic tracking-tight md:text-3xl flex items-baseline gap-1">

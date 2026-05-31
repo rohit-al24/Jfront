@@ -31,6 +31,11 @@ body {
 }
 
 /* ── Growth Visualizer animations ─────────────────────────────────────────── */
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%       { opacity: 1;    transform: scale(1.15); }
+}
+
 @keyframes power-lift {
   0%   { transform: scale(1) translateY(0); }
   20%  { transform: scale(1.55) translateY(-18px); filter: drop-shadow(0 0 24px #f59e0b); }
@@ -91,6 +96,12 @@ body {
 
 @keyframes modal-pop {
   0%   { transform: scale(0.5) translateY(40px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.85) translateY(8px); opacity: 0; }
+  60%  { transform: scale(1.03) translateY(-2px); opacity: 1; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 

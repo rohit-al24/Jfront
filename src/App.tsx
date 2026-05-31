@@ -34,6 +34,7 @@ import { Chat } from './pages/app/Chat'
 import { ChatRoom } from './pages/app/ChatRoom'
 import { People } from './pages/app/People'
 import { UserProfile } from './pages/app/UserProfile'
+import { Settings } from './pages/app/Settings'
 import { Mondai } from './pages/Mondai'
 import { RequireAuth } from './routes/RequireAuth'
 import { RequirePaid } from './routes/RequirePaid'
@@ -110,6 +111,7 @@ function App() {
             <Route path="users/:userId" element={<UserProfile />} />
             <Route path="chat" element={<Chat />} />
             <Route path="chat/:partnerId" element={<ChatRoom />} />
+            <Route path="settings" element={<Settings />} />
 
             {/* Gated pages — require active subscription */}
             <Route element={<RequirePaid />}>

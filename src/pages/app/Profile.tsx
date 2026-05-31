@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { User, Target, Users, Award, Copy, Check, Download, Pencil, Camera, CheckCircle } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { User, Target, Users, Award, Copy, Check, Download, Pencil, Camera, CheckCircle, Upload, Trash2, X } from 'lucide-react'
+import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
 
-import { apiFetch, apiUrl } from '../../api'
+import { apiFetch, apiUrl, getStoredAuthToken } from '../../api'
 import { useAuth } from '../../auth'
 import { CreatureVisualizer } from '../../components/creature/CreatureVisualizer'
 import type { CreatureTheme } from '../../components/creature/CreatureVisualizer'
@@ -26,7 +28,7 @@ export function Profile() {
   const [status, setStatus] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Social profile (display_username + profile_picture)
+  // Social profile
   const [displayUsername, setDisplayUsername] = useState('')
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null)
   const [editingUsername, setEditingUsername] = useState(false)
@@ -34,6 +36,17 @@ export function Profile() {
   const [savingUsername, setSavingUsername] = useState(false)
   const [uploadingPic, setUploadingPic] = useState(false)
   const picInputRef = useRef<HTMLInputElement>(null)
+
+  // Username live availability check
+  const [unameState, setUnameState] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle')
+  const [unameMsg, setUnameMsg] = useState('')
+  const unameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Crop modal
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
+  const [crop, setCrop] = useState<Crop>()
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | undefined>()
+  const cropImgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     apiFetch<PathPayload>('/api/path/').then(setPath).catch(() => null)
@@ -46,25 +59,56 @@ export function Profile() {
       .catch(() => null)
   }, [])
 
+  // Live username availability check
+  useEffect(() => {
+    if (!editingUsername) return
+    const val = usernameInput.trim()
+    if (!val || val === displayUsername) { setUnameState('idle'); setUnameMsg(''); return }
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(val)) {
+      setUnameState('invalid')
+      setUnameMsg('3–30 chars, letters/numbers/underscores only')
+      return
+    }
+    setUnameState('checking')
+    if (unameTimer.current) clearTimeout(unameTimer.current)
+    unameTimer.current = setTimeout(async () => {
+      try {
+        const r = await apiFetch<{ available: boolean; detail: string }>(
+          `/api/auth/check-username/?username=${encodeURIComponent(val)}`
+        )
+        setUnameState(r.available ? 'available' : 'taken')
+        setUnameMsg(r.detail)
+      } catch {
+        setUnameState('idle')
+      }
+    }, 400)
+  }, [usernameInput, editingUsername])
+
+  /** Authenticated FormData POST helper — fixes the 401 that plain fetch caused */
+  async function authedFormPost(path: string, fd: FormData) {
+    const headers: Record<string, string> = {}
+    const token = getStoredAuthToken()
+    if (token) headers['Authorization'] = `Token ${token}`
+    const res = await fetch(apiUrl(path), { method: 'POST', headers, body: fd, credentials: 'include' })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      throw new Error((j as any).detail || `Request failed (${res.status})`)
+    }
+    return res.json() as Promise<any>
+  }
+
   async function saveDisplayUsername() {
     const val = usernameInput.trim()
     if (!val || val === displayUsername) { setEditingUsername(false); return }
+    if (unameState !== 'available') return
     setSavingUsername(true)
     try {
       const fd = new FormData()
       fd.append('display_username', val)
-      const res = await fetch('/api/social/profile/', {
-        method: 'POST',
-        body: fd,
-        credentials: 'include',
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.detail || 'Failed to save username')
-      }
-      const j = await res.json()
+      const j = await authedFormPost('/api/social/profile/', fd)
       setDisplayUsername(j.display_username || val)
       setEditingUsername(false)
+      setUnameState('idle')
       setStatus('Username updated!')
       setTimeout(() => setStatus(null), 1500)
     } catch (e: any) {
@@ -74,30 +118,62 @@ export function Profile() {
     }
   }
 
-  async function uploadProfilePic(file: File) {
+  // Called with a File or Blob after optional crop
+  async function uploadProfilePic(blob: Blob, filename = 'profile.jpg') {
     setUploadingPic(true)
     try {
       const fd = new FormData()
-      fd.append('profile_picture', file)
-      const res = await fetch('/api/social/profile/', {
-        method: 'POST',
-        body: fd,
-        credentials: 'include',
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.detail || 'Upload failed')
-      }
-      const j = await res.json()
+      fd.append('profile_picture', blob, filename)
+      const j = await authedFormPost('/api/social/profile/', fd)
       setProfilePicUrl(j.profile_picture || null)
       setStatus('Profile picture updated!')
-      setTimeout(() => setStatus(null), 1500)
+      setTimeout(() => setStatus(null), 2000)
     } catch (e: any) {
       setStatus(e?.message ?? 'Upload failed')
     } finally {
       setUploadingPic(false)
     }
   }
+
+  async function removeProfilePic() {
+    try {
+      const fd = new FormData()
+      fd.append('remove_picture', '1')
+      const j = await authedFormPost('/api/social/profile/', fd)
+      setProfilePicUrl(j.profile_picture || null)
+      setStatus('Profile picture removed')
+      setTimeout(() => setStatus(null), 1500)
+    } catch (e: any) {
+      setStatus(e?.message ?? 'Failed to remove picture')
+    }
+  }
+
+  function onFileSelected(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => { setCropSrc(reader.result as string); setCrop(undefined); setCompletedCrop(undefined) }
+    reader.readAsDataURL(file)
+  }
+
+  function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const { naturalWidth: w, naturalHeight: h } = e.currentTarget
+    const c = centerCrop(makeAspectCrop({ unit: '%', width: 90 }, 1, w, h), w, h)
+    setCrop(c)
+  }
+
+  const getCroppedBlob = useCallback(async (): Promise<Blob | null> => {
+    if (!completedCrop || !cropImgRef.current) return null
+    const img = cropImgRef.current
+    const canvas = document.createElement('canvas')
+    const scaleX = img.naturalWidth / img.width
+    const scaleY = img.naturalHeight / img.height
+    const size = 400
+    canvas.width = size; canvas.height = size
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, completedCrop.x * scaleX, completedCrop.y * scaleY,
+      completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, size, size)
+    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9))
+  }, [completedCrop])
 
   async function copyCode() {
     const code = ref?.referral_code || state?.user?.referral_code
@@ -162,9 +238,67 @@ export function Profile() {
 
   return (
     <div className="space-y-6">
+      {/* Crop modal */}
+      {cropSrc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-white/10 bg-[#141418] shadow-2xl">
+            <div className="h-1 w-full bg-gradient-to-r from-yellow-500 to-red-500" />
+            <div className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-black uppercase tracking-widest text-white/60">Adjust Photo</span>
+                <button onClick={() => setCropSrc(null)} className="text-white/30 hover:text-white transition"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="flex items-center justify-center rounded-xl overflow-hidden bg-black/40">
+                <ReactCrop
+                  crop={crop}
+                  onChange={(_px, pct) => setCrop(pct)}
+                  onComplete={(c) => setCompletedCrop(c)}
+                  aspect={1}
+                  circularCrop
+                  keepSelection
+                >
+                  <img
+                    ref={cropImgRef}
+                    src={cropSrc}
+                    alt="Crop preview"
+                    onLoad={onCropImageLoad}
+                    className="max-h-72 w-auto"
+                    style={{ display: 'block' }}
+                  />
+                </ReactCrop>
+              </div>
+              <p className="mt-2 text-center text-xs text-white/30">Drag to reposition · Resize handles to crop</p>
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => setCropSrc(null)}
+                  className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white/50 ring-1 ring-white/10 transition hover:ring-white/20 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const blob = await getCroppedBlob()
+                    if (!blob) return
+                    setCropSrc(null)
+                    void uploadProfilePic(blob, 'profile.jpg')
+                  }}
+                  disabled={uploadingPic}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-yellow-500 py-2.5 text-sm font-black text-black transition hover:bg-yellow-400 disabled:opacity-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  {uploadingPic ? 'Uploading…' : 'Upload'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {status && (
         <div className={['rounded-2xl px-5 py-4 text-base font-semibold ring-1',
-          status.includes('copied') ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/30' : 'bg-red-950/60 text-red-300 ring-red-500/30'].join(' ')}>
+          status.toLowerCase().includes('updat') || status.toLowerCase().includes('remov') || status.toLowerCase().includes('copi')
+            ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/30'
+            : 'bg-red-950/60 text-red-300 ring-red-500/30'].join(' ')}>
           {status}
         </div>
       )}
@@ -173,47 +307,64 @@ export function Profile() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0a0d1a] to-[#0d0d0d] p-6 ring-1 ring-white/10 md:p-8">
         <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-blue-600/10 blur-3xl" />
 
-        {/* Compulsory profile pic banner */}
-        {!profilePicUrl && (
-          <div className="mb-4 flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-950/40 px-4 py-3 text-sm text-orange-300">
-            <Camera className="h-4 w-4 flex-none text-orange-400" />
-            <span className="flex-1">Set your profile picture — it's required to appear in friends' hints and leaderboard.</span>
-            <button
-              onClick={() => picInputRef.current?.click()}
-              className="rounded-lg bg-orange-500/20 px-3 py-1 text-xs font-bold text-orange-300 ring-1 ring-orange-500/40 hover:bg-orange-500/30 transition"
-            >
-              Upload
-            </button>
-          </div>
-        )}
-
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-          {/* Avatar with upload */}
-          <div className="relative flex-none">
-            <div
-              onClick={() => picInputRef.current?.click()}
-              className={`group relative flex h-20 w-20 cursor-pointer items-center justify-center rounded-2xl overflow-hidden ring-2 transition-all ${
-                profilePicUrl ? 'ring-yellow-500/40 hover:ring-yellow-400/60' : 'ring-orange-500/50 hover:ring-orange-400/70'
-              }`}
-            >
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start">
+          {/* Avatar area */}
+          <div className="flex flex-none flex-col items-center gap-2">
+            {/* Photo */}
+            <div className={`relative flex h-24 w-24 items-center justify-center rounded-2xl overflow-hidden ring-2 ${
+              profilePicUrl ? 'ring-yellow-500/40' : 'ring-dashed ring-white/20'
+            }`}>
               {profilePicUrl ? (
                 <img src={profilePicUrl} alt="Profile" className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-red-600/40 to-yellow-500/30 text-2xl font-black text-white">
-                  {(state?.user?.username?.[0] ?? 'U').toUpperCase()}
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-white/[0.06] to-white/[0.02] text-white/30">
+                  <Camera className="h-6 w-6" />
+                  <span className="text-[9px] font-bold uppercase tracking-wider">No Photo</span>
                 </div>
               )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                {uploadingPic
-                  ? <svg className="h-6 w-6 animate-spin text-white" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                  : <Camera className="h-6 w-6 text-white" />}
-              </div>
+              {uploadingPic && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                  <svg className="h-6 w-6 animate-spin text-yellow-400" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                </div>
+              )}
             </div>
+
+            {/* Buttons below avatar */}
+            {profilePicUrl ? (
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => picInputRef.current?.click()}
+                  className="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-bold text-white/60 ring-1 ring-white/10 transition hover:bg-yellow-500/15 hover:text-yellow-300 hover:ring-yellow-500/30"
+                  title="Change photo"
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </button>
+                <button
+                  onClick={removeProfilePic}
+                  className="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-bold text-white/60 ring-1 ring-white/10 transition hover:bg-red-500/15 hover:text-red-300 hover:ring-red-500/30"
+                  title="Remove photo"
+                >
+                  <Trash2 className="h-3 w-3" /> Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => picInputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-xl bg-yellow-500/15 px-3 py-2 text-xs font-black text-yellow-300 ring-1 ring-yellow-500/30 transition hover:bg-yellow-500/25 hover:ring-yellow-400/50"
+              >
+                <Upload className="h-3.5 w-3.5" /> Upload Photo
+              </button>
+            )}
+
             {profilePicUrl && (
-              <div className="absolute -bottom-1 -right-1 rounded-full bg-emerald-500 p-0.5 ring-2 ring-[#0d0d0d]">
-                <CheckCircle className="h-3 w-3 text-white" />
+              <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
+                <CheckCircle className="h-3 w-3" /> Set
               </div>
             )}
+
             <input
               ref={picInputRef}
               type="file"
@@ -221,7 +372,7 @@ export function Profile() {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0]
-                if (file) void uploadProfilePic(file)
+                if (file) onFileSelected(file)
                 e.target.value = ''
               }}
             />
@@ -233,33 +384,66 @@ export function Profile() {
             </div>
             <h2 className="mt-1 text-3xl font-black text-white">{state?.user?.full_name || state?.user?.username}</h2>
 
-            {/* Editable display username */}
-            <div className="mt-1 flex items-center gap-2">
+            {/* Editable display username with live availability check */}
+            <div className="mt-1.5">
               {editingUsername ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-white/40 text-sm">@</span>
-                  <input
-                    autoFocus
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-                    onKeyDown={(e) => { if (e.key === 'Enter') void saveDisplayUsername(); if (e.key === 'Escape') setEditingUsername(false) }}
-                    className="rounded-lg border border-yellow-500/40 bg-white/[0.06] px-3 py-1 text-sm text-white outline-none focus:border-yellow-500/70 focus:ring-1 focus:ring-yellow-500/30 w-40"
-                    maxLength={30}
-                  />
-                  <button
-                    onClick={() => void saveDisplayUsername()}
-                    disabled={savingUsername}
-                    className="rounded-lg bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300 ring-1 ring-yellow-500/30 hover:bg-yellow-500/30 transition disabled:opacity-50"
-                  >
-                    {savingUsername ? '…' : 'Save'}
-                  </button>
-                  <button onClick={() => setEditingUsername(false)} className="text-white/30 hover:text-white/60 text-xs">✕</button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/40 text-sm font-semibold">@</span>
+                    <div className="relative flex-1 max-w-[200px]">
+                      <input
+                        autoFocus
+                        value={usernameInput}
+                        onChange={(e) => setUsernameInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void saveDisplayUsername()
+                          if (e.key === 'Escape') { setEditingUsername(false); setUnameState('idle') }
+                        }}
+                        className="w-full rounded-lg border border-yellow-500/30 bg-white/[0.06] px-3 py-1.5 text-sm text-white outline-none focus:border-yellow-500/60 focus:ring-1 focus:ring-yellow-500/25 pr-7"
+                        maxLength={30}
+                        placeholder="your_handle"
+                      />
+                      {/* Status icon inside input */}
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        {unameState === 'checking' && (
+                          <svg className="h-3.5 w-3.5 animate-spin text-white/40" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                          </svg>
+                        )}
+                        {unameState === 'available' && <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />}
+                        {(unameState === 'taken' || unameState === 'invalid') && <X className="h-3.5 w-3.5 text-red-400" />}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => void saveDisplayUsername()}
+                      disabled={savingUsername || unameState !== 'available'}
+                      className="rounded-lg bg-yellow-500/20 px-3 py-1.5 text-xs font-bold text-yellow-300 ring-1 ring-yellow-500/30 transition hover:bg-yellow-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {savingUsername ? '…' : 'Save'}
+                    </button>
+                    <button onClick={() => { setEditingUsername(false); setUnameState('idle') }} className="text-white/30 hover:text-white/60 transition">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {/* Status message */}
+                  {unameMsg && (
+                    <p className={`text-[11px] font-semibold ml-5 ${{
+                      available: 'text-emerald-400',
+                      taken: 'text-red-400',
+                      invalid: 'text-orange-400',
+                      checking: 'text-white/40',
+                      idle: 'text-white/40',
+                    }[unameState]}`}>
+                      {unameMsg}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-white/50">@{displayUsername || state?.user?.username}</span>
                   <button
-                    onClick={() => { setUsernameInput(displayUsername || state?.user?.username || ''); setEditingUsername(true) }}
+                    onClick={() => { setUsernameInput(displayUsername || state?.user?.username || ''); setEditingUsername(true); setUnameState('idle') }}
                     className="rounded-md p-1 text-white/30 hover:text-yellow-400 transition"
                     title="Edit username"
                   >
@@ -267,10 +451,10 @@ export function Profile() {
                   </button>
                 </div>
               )}
-              {state?.user?.email && <span className="text-sm text-white/30">• {state.user.email}</span>}
+              {state?.user?.email && !editingUsername && <span className="mt-0.5 block text-sm text-white/30">{state.user.email}</span>}
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-3">
+            <div className="mt-3 flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-red-600/20 px-3 py-1 text-sm font-bold text-red-400 ring-1 ring-red-500/30">{level}</span>
               <span className="rounded-full bg-yellow-500/15 px-3 py-1 text-sm font-bold text-yellow-400 ring-1 ring-yellow-500/30">
                 {state?.user?.total_points ?? 0} XP
