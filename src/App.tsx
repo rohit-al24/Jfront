@@ -33,6 +33,7 @@ import DailyRevise from './pages/app/DailyRevise'
 import { Chat } from './pages/app/Chat'
 import { ChatRoom } from './pages/app/ChatRoom'
 import { People } from './pages/app/People'
+import { UserProfile } from './pages/app/UserProfile'
 import { Mondai } from './pages/Mondai'
 import { RequireAuth } from './routes/RequireAuth'
 import { RequirePaid } from './routes/RequirePaid'
@@ -106,6 +107,7 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="people" element={<People />} />
             <Route path="requests" element={<Navigate to="/app/people" replace />} />
+            <Route path="users/:userId" element={<UserProfile />} />
             <Route path="chat" element={<Chat />} />
             <Route path="chat/:partnerId" element={<ChatRoom />} />
 

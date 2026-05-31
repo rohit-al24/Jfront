@@ -324,20 +324,43 @@ function HintRow({
           {item.correct}
         </td>
         <td className="px-4 py-4 text-center">
-          <button
-            onClick={onToggle}
-            title={hasAny ? 'View hints' : 'Add a personal hint'}
-            className={`relative inline-flex items-center justify-center h-8 w-8 rounded-lg ring-1 transition-all duration-200 ${
-              hasAny
-                ? 'bg-yellow-500/20 ring-yellow-400/40 text-yellow-400 hover:bg-yellow-500/30'
-                : 'bg-white/[0.05] ring-white/10 text-white/30 hover:bg-yellow-500/10 hover:ring-yellow-400/30 hover:text-yellow-400'
-            }`}
-          >
-            <Lightbulb className="h-4 w-4" />
-            {friendCount > 0 && !hasMyHint && (
-              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-yellow-400" />
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={onToggle}
+              title={hasAny ? 'View hints' : 'Add a personal hint'}
+              className={`relative inline-flex items-center justify-center h-8 w-8 rounded-lg ring-1 transition-all duration-200 ${
+                hasAny
+                  ? 'bg-yellow-500/20 ring-yellow-400/40 text-yellow-400 hover:bg-yellow-500/30'
+                  : 'bg-white/[0.05] ring-white/10 text-white/30 hover:bg-yellow-500/10 hover:ring-yellow-400/30 hover:text-yellow-400'
+              }`}
+            >
+              <Lightbulb className="h-4 w-4" />
+            </button>
+            {friendCount > 0 && (
+              <div className="flex items-center justify-center">
+                {item.friends_hints.slice(0, 3).map((fh, idx) => (
+                  <div
+                    key={fh.user_id}
+                    style={{ marginLeft: idx === 0 ? 0 : '-4px', zIndex: 3 - idx }}
+                    className="relative h-4 w-4 flex-none rounded-full bg-yellow-500/20 ring-1 ring-black flex items-center justify-center overflow-hidden"
+                    title={fh.display_name}
+                  >
+                    <span className="text-[7px] font-black text-yellow-300 leading-none">
+                      {(fh.display_name?.[0] ?? '?').toUpperCase()}
+                    </span>
+                  </div>
+                ))}
+                {friendCount > 3 && (
+                  <div
+                    style={{ marginLeft: '-4px', zIndex: 0 }}
+                    className="h-4 w-4 flex-none rounded-full bg-white/10 ring-1 ring-black flex items-center justify-center"
+                  >
+                    <span className="text-[6px] font-black text-white/60 leading-none">+{friendCount - 3}</span>
+                  </div>
+                )}
+              </div>
             )}
-          </button>
+          </div>
         </td>
       </tr>
 

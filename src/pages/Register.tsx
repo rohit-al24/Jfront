@@ -16,13 +16,17 @@ export function Register() {
     }
   }, [state, navigate])
 
-  const [username, setUsername] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'student' | 'employee'>('student')
-  const [stage, setStage] = useState<'details' | 'emailOtp' | 'college'>('details')
+  const [stage, setStage] = useState<'details' | 'emailOtp' | 'college' | 'username'>('details')
+
+  // Display username (unique @handle) — chosen after college
+  const [displayUsername, setDisplayUsername] = useState('')
+  const [usernameCheckState, setUsernameCheckState] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle')
+  const [usernameCheckMsg, setUsernameCheckMsg] = useState('')
 
   const [emailOtp, setEmailOtp] = useState('')
   const [emailOtpExpiresAt, setEmailOtpExpiresAt] = useState<string | null>(null)
@@ -31,6 +35,27 @@ export function Register() {
   const [colleges, setColleges] = useState<Array<{ id: number; code?: string | null; name: string }>>([])
   const [collegeId, setCollegeId] = useState<number | undefined>(undefined)
   const [collegesLoading, setCollegesLoading] = useState(false)
+
+  // Debounced username availability check
+  useEffect(() => {
+    if (stage !== 'username') return
+    const val = displayUsername.trim()
+    if (!val) { setUsernameCheckState('idle'); setUsernameCheckMsg(''); return }
+    if (val.length < 3) { setUsernameCheckState('invalid'); setUsernameCheckMsg('Min 3 characters'); return }
+    if (val.length > 30) { setUsernameCheckState('invalid'); setUsernameCheckMsg('Max 30 characters'); return }
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) { setUsernameCheckState('invalid'); setUsernameCheckMsg('Only letters, numbers, underscores'); return }
+    setUsernameCheckState('checking')
+    setUsernameCheckMsg('')
+    const t = window.setTimeout(() => {
+      apiFetch<{ available: boolean; detail: string }>(`/api/auth/check-username/?username=${encodeURIComponent(val)}`)
+        .then((res) => {
+          setUsernameCheckState(res.available ? 'available' : 'taken')
+          setUsernameCheckMsg(res.detail)
+        })
+        .catch(() => { setUsernameCheckState('idle'); setUsernameCheckMsg('') })
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [displayUsername, stage])
   const [targetLevel, setTargetLevel] = useState<'N5' | 'N4'>('N5')
   const [referralCode, setReferralCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -121,7 +146,7 @@ export function Register() {
     setBusy(true)
     try {
       await register({
-        username,
+        username: displayUsername,
         password,
         email: email.trim(),
         first_name: firstName || undefined,
@@ -224,9 +249,6 @@ export function Register() {
 
         {stage === 'details' ? (
         <form onSubmit={onSendEmailOtp} className="mt-5 space-y-4">
-          <input required autoComplete="username"
-            className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-base text-white outline-none placeholder:text-white/30 transition-all focus:border-yellow-500/60 focus:ring-2 focus:ring-yellow-500/20"
-            placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
 
           <div className="grid grid-cols-2 gap-3">
             <input autoComplete="given-name"
@@ -290,7 +312,7 @@ export function Register() {
         ) : null}
 
         {stage === 'college' ? (
-          <form onSubmit={onCreateAccount} className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <form onSubmit={(e) => { e.preventDefault(); setStage('username') }} className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="text-xs font-black uppercase tracking-widest text-yellow-500">College Selection</div>
             <div className="text-sm text-white/60">Type to search, then select from dropdown</div>
 
@@ -348,7 +370,63 @@ export function Register() {
               <button type="button" disabled={busy} onClick={() => { setStage('emailOtp'); setPopup(null) }} className="flex-1 rounded-xl bg-white/[0.03] px-4 py-3 text-base font-bold text-white/80 ring-1 ring-white/10">
                 Back
               </button>
-              <button disabled={busy} className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-base font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(220,38,38,0.4)] disabled:opacity-60">
+              <button type="submit" className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-base font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(220,38,38,0.4)]">
+                Next
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {stage === 'username' ? (
+          <form onSubmit={onCreateAccount} className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="text-xs font-black uppercase tracking-widest text-yellow-500">Choose Your Username</div>
+            <div className="text-sm text-white/60">Pick a unique @handle — this is how others find you.</div>
+
+            <div className="space-y-2">
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-semibold text-base select-none">@</span>
+                <input
+                  required
+                  autoComplete="off"
+                  autoFocus
+                  value={displayUsername}
+                  onChange={(e) => setDisplayUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                  placeholder="your_handle"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] pl-8 pr-4 py-3.5 text-base text-white outline-none placeholder:text-white/30 transition-all focus:border-yellow-500/60 focus:ring-2 focus:ring-yellow-500/20"
+                />
+              </div>
+
+              {/* Availability status */}
+              <div className={`flex items-center gap-2 min-h-[1.5rem] text-sm font-semibold transition-all ${
+                usernameCheckState === 'checking' ? 'text-white/50' :
+                usernameCheckState === 'available' ? 'text-emerald-400' :
+                usernameCheckState === 'taken' ? 'text-red-400' :
+                usernameCheckState === 'invalid' ? 'text-yellow-400' : 'text-transparent'
+              }`}>
+                {usernameCheckState === 'checking' && (
+                  <svg className="h-4 w-4 animate-spin flex-none" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                )}
+                {usernameCheckState === 'available' && (
+                  <svg className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                )}
+                {(usernameCheckState === 'taken' || usernameCheckState === 'invalid') && (
+                  <svg className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                )}
+                {usernameCheckState !== 'idle' && <span>{usernameCheckMsg}</span>}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button type="button" disabled={busy} onClick={() => { setStage('college'); setPopup(null) }} className="flex-1 rounded-xl bg-white/[0.03] px-4 py-3 text-base font-bold text-white/80 ring-1 ring-white/10">
+                Back
+              </button>
+              <button
+                disabled={busy || usernameCheckState !== 'available'}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-base font-black uppercase tracking-widest text-white shadow-[0_0_30px_rgba(220,38,38,0.4)] disabled:opacity-40"
+              >
                 {busy ? 'Creating…' : 'Create Account'}
               </button>
             </div>

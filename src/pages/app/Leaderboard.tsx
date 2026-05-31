@@ -1,6 +1,7 @@
-import { Trophy, Crown, Medal, Star, UserPlus } from 'lucide-react'
+import { Trophy, Crown, Medal, Users } from 'lucide-react'
 
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { apiFetch } from '../../api'
 
@@ -14,6 +15,8 @@ type LeaderboardEntry = {
   points_total: number
   id?: number
   college?: string | null
+  profile_picture?: string | null
+  display_username?: string | null
 }
 
 type LeaderboardResponse = {
@@ -34,7 +37,7 @@ export function Leaderboard() {
   const [status, setStatus] = useState<string | null>(null)
   const [collegeName, setCollegeName] = useState<string | null>(null)
   const [collegeScoped, setCollegeScoped] = useState(false)
-  const [sentRequests, setSentRequests] = useState<Set<number>>(new Set())
+  const navigate = useNavigate()
 
   useEffect(() => {
     apiFetch<LeaderboardResponse>('/api/leaderboard/')
@@ -45,16 +48,6 @@ export function Leaderboard() {
       })
       .catch((e: any) => setStatus(e?.message ?? 'Failed to load leaderboard'))
   }, [])
-
-  async function sendRequest(userId: number) {
-    try {
-      await apiFetch('/api/social/requests/send/', { method: 'POST', json: { to_user_id: userId } })
-      setSentRequests((prev) => new Set([...prev, userId]))
-    } catch (e: any) {
-      const msg = (e?.data?.detail ?? e?.message ?? 'Failed to send request').toString()
-      setStatus(msg)
-    }
-  }
 
   const top3 = entries.slice(0, 3)
 
@@ -106,41 +99,51 @@ export function Leaderboard() {
       <div className="rounded-2xl bg-white/[0.03] p-6 ring-1 ring-white/10 md:p-8">
         <h3 className="mb-5 text-lg font-bold uppercase tracking-wider text-white/70">Full Rankings</h3>
         <div className="space-y-2">
-          {entries.map((e) => (
-            <div key={e.rank} className={['flex items-center gap-4 rounded-xl p-4 ring-1 transition-all hover:ring-yellow-500/30',
-              e.rank <= 3 ? 'bg-yellow-500/5 ring-yellow-500/15' : 'bg-white/[0.03] ring-white/8'].join(' ')}>
-              <div className="flex h-9 w-9 flex-none items-center justify-center">
-                <RankBadge rank={e.rank} />
-              </div>
-              <div className={['flex h-11 w-11 flex-none items-center justify-center rounded-full text-sm font-black',
-                e.rank === 1 ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'].join(' ')}>{e.avatar}</div>
-              <div className="flex-1 min-w-0">
-                <div className="text-base font-bold text-white">{e.name}</div>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-xs text-white/40">{e.level}</span>
-                  {e.college && <><span className="text-white/20">·</span><span className="text-xs text-violet-400">{e.college}</span></>}
-                  <span className="text-white/20">·</span>
-                  <span className="flex items-center gap-1 text-xs text-orange-400"><Star className="h-3 w-3" />{e.streak} day streak</span>
+          {entries.map((e) => {
+            const handle = e.display_username || e.name
+            const initial = (e.avatar || handle?.[0] || '?').toUpperCase()
+            return (
+              <div key={e.rank} className={['flex items-center gap-3 rounded-xl p-3 ring-1 transition-all hover:ring-yellow-500/30',
+                e.rank <= 3 ? 'bg-yellow-500/5 ring-yellow-500/15' : 'bg-white/[0.03] ring-white/8'].join(' ')}>
+                {/* Rank */}
+                <div className="flex h-8 w-8 flex-none items-center justify-center">
+                  <RankBadge rank={e.rank} />
+                </div>
+                {/* Profile pic */}
+                <div className={['flex h-10 w-10 flex-none items-center justify-center rounded-full text-sm font-black overflow-hidden ring-1',
+                  e.rank === 1 ? 'ring-yellow-500/40' : 'ring-white/10'].join(' ')}>
+                  {e.profile_picture ? (
+                    <img src={e.profile_picture} alt={handle} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className={`flex h-full w-full items-center justify-center ${e.rank === 1 ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'}`}>
+                      {initial}
+                    </div>
+                  )}
+                </div>
+                {/* Name + username */}
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-sm font-bold text-white leading-tight">{e.name}</div>
+                  <div className="truncate text-xs text-white/40">@{handle} · {e.level}</div>
+                </div>
+                {/* XP + view profile */}
+                <div className="flex items-center gap-2 flex-none">
+                  <div className="text-right">
+                    <div className="text-base font-black text-yellow-400">{e.points_week.toLocaleString()}</div>
+                    <div className="text-[10px] text-white/30">XP</div>
+                  </div>
+                  {e.id != null && (
+                    <button
+                      onClick={() => navigate(`/app/users/${e.id}`)}
+                      title="View profile"
+                      className="flex items-center justify-center rounded-xl bg-violet-600/20 p-2 text-violet-300 ring-1 ring-violet-500/30 transition hover:bg-violet-600/40"
+                    >
+                      <Users className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <div className="text-lg font-black text-yellow-400">{e.points_week.toLocaleString()}</div>
-                  <div className="text-xs text-white/30">XP</div>
-                </div>
-                {e.id != null && (
-                  <button
-                    onClick={() => sendRequest(e.id!)}
-                    disabled={sentRequests.has(e.id!)}
-                    title="Send friend request"
-                    className="flex items-center justify-center rounded-xl bg-violet-600/20 p-2 text-violet-300 ring-1 ring-violet-500/30 transition hover:bg-violet-600/40 disabled:opacity-30"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
         {!entries.length && !status ? (
           <p className="mt-5 text-center text-sm text-white/20">No rankings yet.</p>
