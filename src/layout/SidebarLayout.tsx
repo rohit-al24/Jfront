@@ -22,7 +22,7 @@ const navItems: NavItemConfig[] = [
   { to: '/app/review', label: 'Review', icon: RotateCcw },
   { to: '/app/course', label: 'Course', icon: GraduationCap },
   { to: '/app/leaderboard', label: 'Leaderboard', icon: Trophy },
-  { to: '/app/requests', label: 'Requests', icon: Users },
+  { to: '/app/people', label: 'People', icon: Users },
   { to: '/app/chat', label: 'Messages', icon: MessageCircle },
   { to: '/app/shop', label: 'Shop', icon: ShoppingBag },
   { to: '/app/profile', label: 'Profile', icon: User },
@@ -225,7 +225,7 @@ export function SidebarLayout({
               {...item}
               collapsed={collapsed}
               locked={showPaymentsUi && !isPaid && GATED_PATHS.some((p) => item.to.startsWith(p))}
-              badge={item.to === '/app/requests' ? requestsBadge : undefined}
+              badge={item.to === '/app/people' ? requestsBadge : undefined}
             />
           ))}
         </nav>
@@ -319,7 +319,7 @@ export function SidebarLayout({
                   <DesktopNavItem
                     {...item}
                     locked={showPaymentsUi && !isPaid && GATED_PATHS.some((p) => item.to.startsWith(p))}
-                    badge={item.to === '/app/requests' ? requestsBadge : undefined}
+                    badge={item.to === '/app/people' ? requestsBadge : undefined}
                   />
                 </div>
               ))}

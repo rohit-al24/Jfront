@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, PhoneCall, Send } from 'lucide-react'
 import { apiFetch } from '../../api'
 import { useAuth } from '../../auth'
 
@@ -18,12 +18,17 @@ type PartnerInfo = {
   display_username: string | null
 }
 
+type Features = {
+  audio_calls_enabled: boolean
+}
+
 export function ChatRoom() {
   const { partnerId } = useParams<{ partnerId: string }>()
   const navigate = useNavigate()
   const { state } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [partner, setPartner] = useState<PartnerInfo | null>(null)
+  const [audioEnabled, setAudioEnabled] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -45,6 +50,12 @@ export function ChatRoom() {
     return () => clearInterval(interval)
   }, [partnerId])
 
+  useEffect(() => {
+    apiFetch<Features>('/api/social/features/')
+      .then((r) => setAudioEnabled(!!r.audio_calls_enabled))
+      .catch(() => setAudioEnabled(false))
+  }, [])
+
   async function sendMessage() {
     if (!input.trim() || !partnerId || sending) return
     setSending(true)
@@ -64,6 +75,18 @@ export function ChatRoom() {
 
   const myId = state?.user?.id
 
+  function startAudioCall() {
+    if (!audioEnabled) return
+    const pid = Number(partnerId)
+    if (!myId || !pid || Number.isNaN(pid)) return
+    const lo = Math.min(myId, pid)
+    const hi = Math.max(myId, pid)
+    const room = `bengo-${lo}-${hi}`
+    const base = ((import.meta as any)?.env?.VITE_AUDIO_CALL_BASE_URL as string | undefined) || 'https://meet.jit.si'
+    const url = `${base.replace(/\/+$/, '')}/${encodeURIComponent(room)}#config.startWithVideoMuted=true&config.prejoinPageEnabled=false`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   return (
     <div className="flex flex-col h-[80vh] max-h-[700px]">
       {/* Header */}
@@ -77,6 +100,18 @@ export function ChatRoom() {
         <div>
           <p className="font-bold text-white text-sm">{partner?.display_username || partner?.username || '…'}</p>
           <p className="text-xs text-white/30">@{partner?.username}</p>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          {audioEnabled ? (
+            <button
+              onClick={startAudioCall}
+              title="Audio call"
+              className="inline-flex items-center justify-center rounded-xl bg-violet-600/20 p-2 text-violet-200 ring-1 ring-violet-500/30 transition hover:bg-violet-600/35"
+            >
+              <PhoneCall className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
       </div>
 

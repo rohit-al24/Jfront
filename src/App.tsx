@@ -32,7 +32,7 @@ import { VocabularyStudy } from './pages/app/VocabularyStudy'
 import DailyRevise from './pages/app/DailyRevise'
 import { Chat } from './pages/app/Chat'
 import { ChatRoom } from './pages/app/ChatRoom'
-import { FriendRequests } from './pages/app/FriendRequests'
+import { People } from './pages/app/People'
 import { Mondai } from './pages/Mondai'
 import { RequireAuth } from './routes/RequireAuth'
 import { RequirePaid } from './routes/RequirePaid'
@@ -104,7 +104,8 @@ function App() {
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="shop" element={<Shop />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="requests" element={<FriendRequests />} />
+            <Route path="people" element={<People />} />
+            <Route path="requests" element={<Navigate to="/app/people" replace />} />
             <Route path="chat" element={<Chat />} />
             <Route path="chat/:partnerId" element={<ChatRoom />} />
 

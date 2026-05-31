@@ -50,7 +50,10 @@ export function Leaderboard() {
     try {
       await apiFetch('/api/social/requests/send/', { method: 'POST', json: { to_user_id: userId } })
       setSentRequests((prev) => new Set([...prev, userId]))
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      const msg = (e?.data?.detail ?? e?.message ?? 'Failed to send request').toString()
+      setStatus(msg)
+    }
   }
 
   const top3 = entries.slice(0, 3)
