@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, Trophy, ShoppingBag, User, RotateCcw, Menu, X, LogOut, Flame, NotebookText, ClipboardCheck, GraduationCap, BadgeCheck, Lock, Users, MessageCircle, Settings } from 'lucide-react'
+import { BookOpen, Trophy, ShoppingBag, User, RotateCcw, Menu, X, LogOut, Flame, NotebookText, ClipboardCheck, GraduationCap, BadgeCheck, Lock, Users, MessageCircle, Settings, Building2, LayoutGrid, BookMarked, UserCheck, UserCog, ClipboardList } from 'lucide-react'
 
 import { useAuth } from '../auth'
 import { usePaymentsConfig } from '../paymentsConfig'
 import { apiFetch } from '../api'
-import mountainVideo from '../assets/mountain.mp4'
+import { useRoles } from '../hooks/useRoles'
 
 const GATED_PATHS = ['/app/study', '/app/quiz', '/app/review', '/app/course']
 
@@ -15,19 +15,91 @@ type NavItemConfig = {
   icon: React.ComponentType<{ className?: string }>
 }
 
-const navItems: NavItemConfig[] = [
+// Core nav always shown to every logged-in user
+const CORE_NAV: NavItemConfig[] = [
   { to: '/app/learn', label: 'Learn', icon: BookOpen },
-  { to: '/app/study', label: 'Study', icon: NotebookText },
-  { to: '/app/quiz', label: 'Quiz', icon: ClipboardCheck },
-  { to: '/app/review', label: 'Review', icon: RotateCcw },
-  { to: '/app/course', label: 'Course', icon: GraduationCap },
-  { to: '/app/leaderboard', label: 'Leaderboard', icon: Trophy },
   { to: '/app/people', label: 'People', icon: Users },
   { to: '/app/chat', label: 'Messages', icon: MessageCircle },
   { to: '/app/shop', label: 'Shop', icon: ShoppingBag },
   { to: '/app/profile', label: 'Profile', icon: User },
   { to: '/app/settings', label: 'Settings', icon: Settings },
 ]
+
+// Study/learning pages — grouped under Student section in the sidebar
+const STUDENT_LEARNING_NAV: NavItemConfig[] = [
+  { to: '/app/study', label: 'Study', icon: NotebookText },
+  { to: '/app/quiz', label: 'Quiz', icon: ClipboardCheck },
+  { to: '/app/review', label: 'Review', icon: RotateCcw },
+  { to: '/app/course', label: 'Course', icon: GraduationCap },
+  { to: '/app/leaderboard', label: 'Leaderboard', icon: Trophy },
+]
+
+// Role-specific sections shown as a labelled group below CORE_NAV
+type RoleSection = { label: string; items: NavItemConfig[] }
+
+function useRoleNav(): RoleSection[] {
+  const { roles, loading } = useRoles()
+  const sections: RoleSection[] = []
+
+  // While loading, pre-show the Student section so nav doesn't flash empty
+  const r = roles ?? []
+
+  if (r.includes('master_admin')) {
+    sections.push({
+      label: 'Master Admin',
+      items: [
+        { to: '/app/master/colleges', label: 'Colleges', icon: Building2 },
+      ],
+    })
+  }
+
+  if (r.includes('college_admin')) {
+    sections.push({
+      label: 'College Admin',
+      items: [
+        { to: '/app/college/departments', label: 'Departments', icon: LayoutGrid },
+        { to: '/app/college/sensei', label: 'Sensei', icon: BookMarked },
+        { to: '/app/college/classes', label: 'Classes', icon: BookOpen },
+        { to: '/app/college/students', label: 'Students', icon: Users },
+        { to: '/app/college/requests', label: 'Requests', icon: ClipboardList },
+      ],
+    })
+  }
+
+  if (r.includes('sensei')) {
+    sections.push({
+      label: 'Sensei',
+      items: [
+        { to: '/app/college/students', label: 'Students', icon: Users },
+        { to: '/app/staff/mentees', label: 'Mentees', icon: UserCheck },
+      ],
+    })
+  }
+
+  if (r.includes('staff') && !r.includes('sensei') && !r.includes('college_admin')) {
+    sections.push({
+      label: 'Staff',
+      items: [
+        { to: '/app/staff/mentees', label: 'My Mentees', icon: UserCheck },
+      ],
+    })
+  }
+
+  // Student section — always shown (admin roles also get it while loading resolves;
+  // once loaded, shown only to non-pure-admin users)
+  const isAdminRole = !loading && r.some(role => ['master_admin', 'college_admin', 'sensei'].includes(role))
+  if (!isAdminRole) {
+    sections.push({
+      label: 'Student',
+      items: [
+        ...STUDENT_LEARNING_NAV,
+        ...(r.includes('student') ? [{ to: '/app/student/mentor', label: 'My Mentor', icon: UserCog }] : []),
+      ],
+    })
+  }
+
+  return sections
+}
 
 function DesktopNavItem({ to, label, icon: Icon, collapsed, locked, badge }: NavItemConfig & { collapsed?: boolean; locked?: boolean; badge?: number }) {
   return (
@@ -114,8 +186,8 @@ export function SidebarLayout({
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [bgReady, setBgReady] = useState(false)
   const [requestsBadge, setRequestsBadge] = useState(0)
+  const roleSections = useRoleNav()
 
   useEffect(() => {
     apiFetch<{ requests: { id: number }[] }>('/api/social/requests/incoming/')
@@ -140,23 +212,12 @@ export function SidebarLayout({
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0D0D0D] text-white">
-      {/* Background Video */}
-      <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-black" />
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-          onCanPlay={() => setBgReady(true)}
-          className={['h-full w-full object-cover transition-opacity duration-300', bgReady ? 'opacity-40' : 'opacity-0'].join(' ')}
-        >
-          <source src={mountainVideo} type="video/mp4" />
-        </video>
-        {/* Heavy gradient overlays for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80" />
-        <div className="absolute inset-0 bg-[#0D0D0D]/60" />
+      {/* CSS Background — deep purple/black gradient with ambient glow orbs */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[#080810]" />
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 90% 70% at 20% 30%, rgba(80,0,160,0.18) 0%, transparent 65%)' }} />
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 60% 50% at 80% 70%, rgba(150,20,20,0.13) 0%, transparent 60%)' }} />
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 50% 40% at 50% 10%, rgba(40,0,80,0.22) 0%, transparent 70%)' }} />
       </div>
 
       {/* Global Header - Fixed */}
@@ -239,7 +300,7 @@ export function SidebarLayout({
       <aside className={`fixed left-0 top-20 hidden h-[calc(100vh-5rem)] ${collapsed ? 'w-20' : 'w-72'} flex-col border-r border-white/10 bg-[#0D0D0D]/95 backdrop-blur-xl md:flex overflow-hidden`}>
         {/* Navigation Items - scrollable */}
         <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 space-y-1 px-3 sidebar-scroll">
-          {navItems
+          {CORE_NAV
             .filter((item) => showPaymentsUi || item.to !== '/app/shop')
             .map((item) => (
             <DesktopNavItem
@@ -249,6 +310,27 @@ export function SidebarLayout({
               locked={showPaymentsUi && !isPaid && GATED_PATHS.some((p) => item.to.startsWith(p))}
               badge={item.to === '/app/people' ? requestsBadge : undefined}
             />
+          ))}
+
+          {/* Role-based sections */}
+          {roleSections.map(section => (
+            <div key={section.label}>
+              {!collapsed && (
+                <div className="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-white/25 select-none">
+                  {section.label}
+                </div>
+              )}
+              {collapsed && <div className="my-2 mx-3 h-px bg-white/10" />}
+              {section.items.map(item => (
+                <DesktopNavItem
+                  key={item.to}
+                  {...item}
+                  collapsed={collapsed}
+                  locked={showPaymentsUi && !isPaid && GATED_PATHS.some(p => item.to.startsWith(p))}
+                  badge={item.to === '/app/people' ? requestsBadge : undefined}
+                />
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -334,7 +416,7 @@ export function SidebarLayout({
 
             {/* Drawer Navigation - scrollable */}
             <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 sidebar-scroll">
-              {navItems
+              {CORE_NAV
                 .filter((item) => showPaymentsUi || item.to !== '/app/shop')
                 .map((item) => (
                 <div key={item.to} onClick={() => setSidebarOpen(false)}>
@@ -343,6 +425,24 @@ export function SidebarLayout({
                     locked={showPaymentsUi && !isPaid && GATED_PATHS.some((p) => item.to.startsWith(p))}
                     badge={item.to === '/app/people' ? requestsBadge : undefined}
                   />
+                </div>
+              ))}
+
+              {/* Role-based sections (mobile) */}
+              {roleSections.map(section => (
+                <div key={section.label}>
+                  <div className="px-6 pt-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-white/25 select-none">
+                    {section.label}
+                  </div>
+                  {section.items.map(item => (
+                    <div key={item.to} onClick={() => setSidebarOpen(false)}>
+                      <DesktopNavItem
+                        {...item}
+                        locked={showPaymentsUi && !isPaid && GATED_PATHS.some(p => item.to.startsWith(p))}
+                        badge={item.to === '/app/people' ? requestsBadge : undefined}
+                      />
+                    </div>
+                  ))}
                 </div>
               ))}
             </nav>
@@ -396,8 +496,8 @@ export function SidebarLayout({
           </div>
 
           {/* Page Content */}
-          <div className="p-4 pb-24 md:p-8 md:pb-8">
-            <div className="mx-auto w-full max-w-3xl">
+          <div className="p-4 pb-24 md:p-6 md:pb-8">
+            <div className="mx-auto w-full max-w-7xl">
               <Outlet />
             </div>
           </div>
@@ -407,7 +507,7 @@ export function SidebarLayout({
       {/* Mobile Bottom Tab Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0D0D0D]/98 backdrop-blur-xl md:hidden">
         <div className="grid grid-cols-3">
-          {navItems.slice(0, 3).map((item) => (
+          {CORE_NAV.slice(0, 3).map((item) => (
             <MobileNavItem key={item.to} {...item} />
           ))}
         </div>

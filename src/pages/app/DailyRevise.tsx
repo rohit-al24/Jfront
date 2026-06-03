@@ -110,7 +110,7 @@ export default function DailyRevise() {
 
   if (mode === 'select') {
     return (
-      <div className="min-h-screen bg-[#07080B] px-4 py-6">
+      <div className="w-full">
         <div className="max-w-lg mx-auto">
           <div className="flex items-center gap-3 mb-8">
             <button onClick={() => navigate(-1)} className="p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition">
@@ -174,7 +174,7 @@ export default function DailyRevise() {
 
   if (mode === 'loading') {
     return (
-      <div className="min-h-screen bg-[#07080B] flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4" />
           <div className="text-white/60 text-sm">Loading your quiz...</div>
@@ -187,7 +187,7 @@ export default function DailyRevise() {
     const pct = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
     const review_count = questions.filter((q) => q.is_review).length;
     return (
-      <div className="min-h-screen bg-[#07080B] px-4 py-8">
+      <div className="w-full py-4">
         <div className="max-w-md mx-auto text-center">
           <div className="text-6xl mb-4">{pct >= 80 ? '🎉' : pct >= 50 ? '👍' : '💪'}</div>
           <h2 className="text-3xl font-black text-white mb-2">Session Complete!</h2>
@@ -245,7 +245,7 @@ export default function DailyRevise() {
   const progress = (currentIndex / questions.length) * 100;
 
   return (
-    <div className="min-h-screen bg-[#07080B] px-4 py-4">
+    <div className="w-full">
       <div className="max-w-lg mx-auto">
         <div className="flex items-center gap-3 mb-4">
           <button

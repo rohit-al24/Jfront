@@ -35,6 +35,18 @@ import { ChatRoom } from './pages/app/ChatRoom'
 import { People } from './pages/app/People'
 import { UserProfile } from './pages/app/UserProfile'
 import { Settings } from './pages/app/Settings'
+import Colleges from './pages/Master_admin/Colleges'
+import CollegeConfig from './pages/Master_admin/CollegeConfig'
+import Department from './pages/College_admin/Department'
+import DeptConfig from './pages/College_admin/DeptConfig'
+import Sensei from './pages/College_admin/Sensei'
+import SenseiConfig from './pages/College_admin/SenseiConfig'
+import Classes from './pages/College_admin/Classes'
+import ClassConfig from './pages/College_admin/ClassConfig'
+import Students from './pages/College_admin/Students'
+import Requests from './pages/College_admin/Requests'
+import Mentees from './pages/Staff/Mentees'
+import MentorProfile from './pages/Student/MentorProfile'
 import { Mondai } from './pages/Mondai'
 import { RequireAuth } from './routes/RequireAuth'
 import { RequirePaid } from './routes/RequirePaid'
@@ -112,6 +124,26 @@ function App() {
             <Route path="chat" element={<Chat />} />
             <Route path="chat/:partnerId" element={<ChatRoom />} />
             <Route path="settings" element={<Settings />} />
+
+            {/* Master Admin */}
+            <Route path="master/colleges" element={<Colleges />} />
+            <Route path="master/colleges/:collegeId" element={<CollegeConfig />} />
+
+            {/* College Admin */}
+            <Route path="college/departments" element={<Department />} />
+            <Route path="college/departments/:deptId" element={<DeptConfig />} />
+            <Route path="college/sensei" element={<Sensei />} />
+            <Route path="college/sensei/:userId" element={<SenseiConfig />} />
+            <Route path="college/classes" element={<Classes />} />
+            <Route path="college/classes/:classId" element={<ClassConfig />} />
+            <Route path="college/students" element={<Students />} />
+            <Route path="college/requests" element={<Requests />} />
+
+            {/* Staff */}
+            <Route path="staff/mentees" element={<Mentees />} />
+
+            {/* Student */}
+            <Route path="student/mentor" element={<MentorProfile />} />
 
             {/* Gated pages — require active subscription */}
             <Route element={<RequirePaid />}>
